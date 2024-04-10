@@ -154,38 +154,40 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
         if("Kununu" in csv_path):
             dest.at[index, "Portal"] = "Kununu"
             # TODO: ID and Link? (Waiting on Elena)
-            dest.at[index, "ReviewTitle"] = src.at[index, "ReviewTitle 1"]
+            dest.at[index, "ReviewTitle"] = src.at[index, "ReviewTitle"]
             #ReviewDate done later
             #OverallSatisfaction done later
-            dest.at[index, "JobTitle"] = src.at[index, "JobTitle 1"]
-            department = re.search('im Bereich (.+?) bei', src.at[index, "JobTitle 1"])
+            dest.at[index, "JobTitle"] = src.at[index, "JobTitle"]
+            department = re.search('im Bereich (.+?) bei', src.at[index, "JobTitle"])
             if department:
                 dest.at[index, "Department"] = department.group(1)
-            if "Ex-" in src.at[index, "JobTitle 1"]:
+            if "Ex-" in src.at[index, "JobTitle"]:
                 dest.at[index, "CurrentFormerEmployee"] = "Former"
+            elif "Bewerber" in src.at[index, "JobTitle"]:
+                dest.at[index, "CurrentFormerEmployee"] = None
             else: 
                 dest.at[index, "CurrentFormerEmployee"] = "Current"
-            year = re.search('Hat bis (.+?) ', src.at[index, "JobTitle 1"])
-            if department:
-                dest.at[index, "Department"] = department.group(1)
-            #row.ContractTerminationKununuOnly, ##
-            #row.Location, 
-            #row.StateRegion, ##
-            #row.Country, 
+            year = re.search('20(.+?) ', src.at[index, "JobTitle"])
+            if year and dest.at[index, "CurrentFormerEmployee"]:
+                dest.at[index, "ContractTerminationKununuOnly"] = "20" + year.group(1)
+            location = re.search('in (.+?) gearbeitet', src.at[index, "JobTitle"])
+            if location:
+                dest.at[index, "Location"] = "20" + location.group(1)
+            
 
         elif("Glassdoor" in csv_path): 
             dest.at[index, "Portal"] = "Glassdoor"
-            id = re.search('Bewertungen-DHL-(.+?).htm', src.at[index, "Link 1"])
+            id = re.search('Bewertungen-DHL-(.+?).htm', src.at[index, "Link"])
             if id:
                 dest.at[index, "ID"] = id.group(1)
-            dest.at[index, "Link"] = "https://glassdoor.de" + src.at[index, "Link 1"]
+            dest.at[index, "Link"] = "https://glassdoor.de" + src.at[index, "Link"]
 
         elif("Indeed" in csv_path):
             dest.at[index, "Portal"] = "Indeed"
-            id = re.search('id=(.+?)', src.at[index, "Link 1"])
+            id = re.search('id=(.+?)', src.at[index, "Link"])
             if id:
                 dest.at[index, "ID"] = id.group(1)
-            dest.at[index, "Link"] = "https://de.indeed.com" + src.at[index, "Link 1"]
+            dest.at[index, "Link"] = "https://de.indeed.com" + src.at[index, "Link"]
             
         else:
             print("Fehler beim Dateipfad!")
@@ -201,32 +203,19 @@ def put_csv_in_sql(paths, conn, curs):
         except: 
             print("CSV File not found, Path may be incorrect, File may be missing, or File may be using wrong encoding.")
         src = pandas.DataFrame(data).astype(str)
+        src.columns = src.columns.str.replace(' ', '')
         if(len(src.index) == 0): # Skip if empty
             continue
         process_scraped_data(src, df, path) # Clean up data, derive missing data
         print(df) # for debugging
         for row in df.itertuples():
             sql_insert_row(SQL_STAGING_TABLE_NAME, row, curs)
-            curs.execute(f'''
-                    INSERT INTO temp (OverallSatisfaction, ReviewDate, Location, RatingBlock, AnswerYesNo, Answer) VALUES (?,?,?,?,?,?);
-                    ''', 
-                    #row.ReviewTitle, 
-                    row.OverallSatisfaction,
-                    row.ReviewDate,
-                    #row.JobTitle, 
-                    row.Location, 
-                    row.ReviewText, 
-                    "No",
-                    row.Response 
-                    #row.ResponseDate
-            )
             if row.index % 10 == 9: # Commit records every 10 rows
                 conn.commit()
-    conn.commit()
+        conn.commit()
 
 def fetch_new_reviews(queue):
     try:
-        #connection = pyodbc.connect(f"Driver={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database=master;Trusted_Connection=True;") # TODO Trusted connection = false, try different authentification method. DHL will most likely not use Windows Authentification
         connection = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
         cursor = connection.cursor()
         put_csv_in_sql(SCREAMINGFROG_CSV_PATH, connection, cursor)
@@ -247,16 +236,16 @@ def generate_responses(reviews, errors):
     }
     for review in reviews:
         gaia_payload = {
-            "prompt": PROMPT_PREFIX + "Tolle Kolleginnen und Kollegen, kreative Freiheit, superspannende Kunden, moderne Arbeitsumgebung und mobile office Option. Vorteile: Sehr positive Kultur. Nachteile: Kein Kölsch im Getränkekühlschrank :-)<|endoftext|>", #review.get('Rating'), # Specify format together with Weichert
+            "prompt": PROMPT_PREFIX + review.get('ReviewText') + "<|endoftext|>", #review.get('Rating'), # Specify format together with Weichert
             "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
             "temperature": 0.7, # Higher number = more risks
-            "top_p": 0.0, # Similar to temperature, don't use both though?
+            "top_p": 0.0, # Similar to temperature
             #"logit_bias": {},
             #"user": "string",
             "n": 1, # Number of responses
             "stream": False, # Stream partial progress
             #"logprobs": None,
-            #"suffix": "", # After input or output string, not sure
+            #"suffix": "", # After input or output string
             #"echo": False, # Echo prompt 
             #"stop": "",    
             #"completion_config": "string",
@@ -328,7 +317,6 @@ def update_sql_entries(reviews):
             reviews.remove(review)
     except pyodbc.Error as exception:
         print(exception)
-
 
 # Main (TODO)
 fetch_new_reviews(queue)
