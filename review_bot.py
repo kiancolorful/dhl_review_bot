@@ -10,10 +10,7 @@ import json
 import re
 import datetime
 
-# CS: Driver=SQL Server;Server=DESKTOP-RVV1V0K;Database=master;Trusted_Connection=True;
-
 # Constants
-CHECK_FREQUENCY = 600
 MSSQL_DRIVER = 'SQL Server' # Alternative: ODBC Driver 18 for SQL Server
 SQL_SERVER_NAME = r"85.215.196.5"
 DATABASE = 'master'
@@ -31,7 +28,7 @@ DATABASE_COLUMNS_AND_DATA_TYPES = [
     ("JobTitle", "nvarchar(50)"), # Scraped, cleanup necessary
     ("Department", "nvarchar(50)"), # Scraped, bad format TODO: nur bei kununu?
     ("CurrentFormerEmployee", "nvarchar(10)"), # Scraped
-    ("ContractTerminationKununuOnly", "int"), # ????? TODO: Wo soll das herkommen?
+    ("ContractTerminationKununuOnly", "int"), # ????? 
     ("Location", "nvarchar(50)"), # Scraped (bad format with Glassdoor, State Included)
     ("StateRegion", "nvarchar(50)"), # PowerBI takes care of it, leave blank
     ("Country", "nvarchar(50)"), # PowerBI takes care of it, leave blank
@@ -156,9 +153,25 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
     for index in range(len(src.index)):
         if("Kununu" in csv_path):
             dest.at[index, "Portal"] = "Kununu"
-            # TODO: ID?
-            # TODO: LINK?
-            #dest.at[index, "Department"] = ""
+            # TODO: ID and Link? (Waiting on Elena)
+            dest.at[index, "ReviewTitle"] = src.at[index, "ReviewTitle 1"]
+            #ReviewDate done later
+            #OverallSatisfaction done later
+            dest.at[index, "JobTitle"] = src.at[index, "JobTitle 1"]
+            department = re.search('im Bereich (.+?) bei', src.at[index, "JobTitle 1"])
+            if department:
+                dest.at[index, "Department"] = department.group(1)
+            if "Ex-" in src.at[index, "JobTitle 1"]:
+                dest.at[index, "CurrentFormerEmployee"] = "Former"
+            else: 
+                dest.at[index, "CurrentFormerEmployee"] = "Current"
+            year = re.search('Hat bis (.+?) ', src.at[index, "JobTitle 1"])
+            if department:
+                dest.at[index, "Department"] = department.group(1)
+            #row.ContractTerminationKununuOnly, ##
+            #row.Location, 
+            #row.StateRegion, ##
+            #row.Country, 
 
         elif("Glassdoor" in csv_path): 
             dest.at[index, "Portal"] = "Glassdoor"
@@ -166,7 +179,6 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             if id:
                 dest.at[index, "ID"] = id.group(1)
             dest.at[index, "Link"] = "https://glassdoor.de" + src.at[index, "Link 1"]
-            dest.at[index, "OverallSatisfaction"] = float((src.at[index, "OverallSatisfaction 1"]).replace(",", "."))
 
         elif("Indeed" in csv_path):
             dest.at[index, "Portal"] = "Indeed"
@@ -179,17 +191,20 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             print("Fehler beim Dateipfad!")
         
         dest.at[index, "Date"] = datetime.date.today() - datetime.timedelta(1) # Yesterday's date
+        dest.at[index, "OverallSatisfaction"] = float((src.at[index, "OverallSatisfaction 1"]).replace(",", "."))
 
 def put_csv_in_sql(paths, conn, curs):
-    # For path in paths?
-    df = pandas.DataFrame()
+    df = pandas.DataFrame() # DataFrame to be added to Staging table
     for path in paths:
-        data = pandas.read_csv(path)
+        try: 
+            data = pandas.read_csv(path)
+        except: 
+            print("CSV File not found, Path may be incorrect, File may be missing, or File may be using wrong encoding.")
         src = pandas.DataFrame(data).astype(str)
-        if(len(src.index) == 0):
+        if(len(src.index) == 0): # Skip if empty
             continue
-        process_scraped_data(src, df, path) # process scraped data within dataframe
-        print(df)
+        process_scraped_data(src, df, path) # Clean up data, derive missing data
+        print(df) # for debugging
         for row in df.itertuples():
             sql_insert_row(SQL_STAGING_TABLE_NAME, row, curs)
             curs.execute(f'''
