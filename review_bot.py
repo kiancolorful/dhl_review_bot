@@ -147,15 +147,13 @@ def sql_insert_row(table_name, row, curs):
                 row.WeightedScore, 
                 )
 
-#def sql_merge_staging(curs, conn):
-
 def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped data
     for index in range(len(src.index)):
         if("Kununu" in csv_path):
             dest.at[index, "Portal"] = "Kununu"
             # TODO: ID and Link? (Waiting on Elena)
             dest.at[index, "ReviewTitle"] = src.at[index, "ReviewTitle"]
-            #ReviewDate done later
+            dest.at[index, "Date"] = src.at[index, "Date"]
             #OverallSatisfaction done later
             dest.at[index, "JobTitle"] = src.at[index, "JobTitle"]
             department = re.search('im Bereich (.+?) bei', src.at[index, "JobTitle"])
@@ -173,6 +171,18 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             location = re.search('in (.+?) gearbeitet', src.at[index, "JobTitle"])
             if location:
                 dest.at[index, "Location"] = "20" + location.group(1)
+            
+            dest.at[index, "ReviewText"] = src.at[index, "ReviewText"]
+            dest.at[index, "MainpositiveAspect"] = src.at[index, "MainpositiveAspect"]
+            dest.at[index, "MainAreaofImprovement"] = src.at[index, "MainAreaofImprovement"]
+            # Sensitive Topic decided by GAIA
+            dest.at[index, "Response"] = src.at[index, "Response"]
+            if src.at[index, "Response"]:
+                dest.at[index, "ResponseYesNo"] = "Yes"
+                dest.at[index, "EstResponseDate"] = src.at[index, "EstResponseDate"]
+                # If no score, evaluate with GAIA
+            else:
+                dest.at[index, "ResponseYesNo"] = "No"
             
 
         elif("Glassdoor" in csv_path): 
@@ -192,6 +202,7 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
         else:
             print("Fehler beim Dateipfad!")
         
+        # TODO: Caluclate date like this?
         dest.at[index, "Date"] = datetime.date.today() - datetime.timedelta(1) # Yesterday's date
         dest.at[index, "OverallSatisfaction"] = float((src.at[index, "OverallSatisfaction 1"]).replace(",", "."))
 
@@ -286,7 +297,7 @@ def upload_responses(reviews, errors):
                 next_elem = driver.find_element(By.XPATH, "//button[@class='css-1orlm12 e8ju0x50']") # Post button
                 next_elem.click()
             if review.get('Platform') == 'Glassdoor': # Glassdoor 
-                next_elem = driver.find_element(By.XPATH, "XXXXXX") # Comment button
+                next_elem = driver.find_element(By.XPATH, '//*[@id="empReview_54905531"]/div/div[3]/a/button') # Comment button
             if review.get('Platform') == 'kununu': # Kununu 
                 next_elem = driver.find_element(By.XPATH, "//*[@id='__next']/div/div[1]/main/div/div[4]/div/article[1]/div/div/div[17]/a") # Comment button
                 next_elem.click() 
