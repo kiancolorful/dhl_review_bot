@@ -149,13 +149,19 @@ def sql_insert_row(table_name, row, curs):
                 )
 
 def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped data
+
+    # TODO
+    # - Kununu ID and Link (Waiting on complete Kununu config from Elena)
+    # - Use actual upload and response dates instead of today's date (dateparser Module imported above, haven't used it yet tho)
+    # - Implement data cleaning for Indeed and Glassdoor
+    #   - Some fields will be missing completely, since this information is not available on Indeed or Glassdoor's site. Just orient yourself based on the information present in the CSV that ScreamingFrog exports
+    #   - The Glassdoor and Indeed Screaming Frog configs are very messy (e.g. multiple reviews in one line), the Kununu config is much more representative of what the final CSVs should look like. So use the Kununu column names and general structure for reference.
+
     for index in range(len(src.index)):
         if("Kununu" in csv_path):
             dest.at[index, "Portal"] = "Kununu"
-            # TODO: ID and Link? (Waiting on Elena)
             dest.at[index, "ID"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             dest.at[index, "ReviewTitle"] = src.at[index, "ReviewTitle"]
-            #dest.at[index, "ReviewDate"] = src.at[index, "ReviewDate"] # Today's date?
             #OverallSatisfaction done later
             dest.at[index, "JobTitle"] = src.at[index, "JobTitle"]
             department = re.search('im Bereich (.+?) bei', src.at[index, "Location"])
@@ -168,7 +174,7 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             else: 
                 dest.at[index, "CurrentFormerEmployee"] = "Current"
             year = re.search('20(.+?) ', src.at[index, "Location"])
-            if year and dest.at[index, "CurrentFormerEmployee"]: # CFE so that Bewerbende don't get included
+            if year and dest.at[index, "CurrentFormerEmployee"]: # CurrentFormerEmployee so that Bewerbende don't get included
                 dest.at[index, "ContractTerminationKununuOnly"] = "20" + year.group(1)
             location = re.search('in (.+?) gearbeitet', src.at[index, "Location"])
             if location:
@@ -180,7 +186,7 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             if src.at[index, "Response"]:
                 dest.at[index, "ResponseYesNo"] = "Yes"
                 dest.at[index, "EstResponseDate"] = datetime.date.today() - datetime.timedelta(1)#src.at[index, "ResponseDate"]
-                # If no score, evaluate with GAIA
+                # If no score, evaluate with GAIA (TODO)
             else:
                 dest.at[index, "ResponseYesNo"] = "No"
             
@@ -196,16 +202,13 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             id = re.search('id=(.+?)', src.at[index, "Link"])
             if id:
                 dest.at[index, "ID"] = id.group(1)
-            dest.at[index, "Link"] = "https://de.indeed.com" + src.at[index, "Link"]
-            #dest.at[index, "ReviewTitle"] = 
+            dest.at[index, "Link"] = "https://de.indeed.com" + src.at[index, "Link"] # Links scraped are relative links
 
         else:
             print("Fehler beim Dateipfad!")
         
-        # TODO: Caluclate date like this?
         dest.at[index, "ReviewDate"] = datetime.date.today() - datetime.timedelta(1) # Yesterday's date
-        
-        dest.at[index, "OverallSatisfaction"] = float((src.at[index, "OverallSatisfaction"]).replace(",", "."))
+        dest.at[index, "OverallSatisfaction"] = float((src.at[index, "OverallSatisfaction"]).replace(",", ".")) # Convert German float string to float datatype
 
 def put_csv_in_sql(paths, conn, curs):
     df = pandas.DataFrame() # DataFrame to be added to Staging table
@@ -231,7 +234,7 @@ def put_csv_in_sql(paths, conn, curs):
         curs.execute(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME} staging WHERE staging.ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});")
         conn.commit()
         curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME}")
-        conn.commit()
+        conn.commit
 
 def fetch_new_reviews(queue):
     try:
