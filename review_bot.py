@@ -171,10 +171,8 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             location = re.search('in (.+?) gearbeitet', src.at[index, "JobTitle"])
             if location:
                 dest.at[index, "Location"] = "20" + location.group(1)
-            
             dest.at[index, "ReviewText"] = src.at[index, "ReviewText"]
-            dest.at[index, "MainpositiveAspect"] = src.at[index, "MainpositiveAspect"]
-            dest.at[index, "MainAreaofImprovement"] = src.at[index, "MainAreaofImprovement"]
+            # TODO: Positive and negative aspects?
             # Sensitive Topic decided by GAIA
             dest.at[index, "Response"] = src.at[index, "Response"]
             if src.at[index, "Response"]:
@@ -184,7 +182,6 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             else:
                 dest.at[index, "ResponseYesNo"] = "No"
             
-
         elif("Glassdoor" in csv_path): 
             dest.at[index, "Portal"] = "Glassdoor"
             id = re.search('Bewertungen-DHL-(.+?).htm', src.at[index, "Link"])
@@ -198,12 +195,13 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             if id:
                 dest.at[index, "ID"] = id.group(1)
             dest.at[index, "Link"] = "https://de.indeed.com" + src.at[index, "Link"]
-            
+            #dest.at[index, "ReviewTitle"] = 
+
         else:
             print("Fehler beim Dateipfad!")
         
         # TODO: Caluclate date like this?
-        dest.at[index, "Date"] = datetime.date.today() - datetime.timedelta(1) # Yesterday's date
+        #dest.at[index, "Date"] = datetime.date.today() - datetime.timedelta(1) # Yesterday's date
         dest.at[index, "OverallSatisfaction"] = float((src.at[index, "OverallSatisfaction 1"]).replace(",", "."))
 
 def put_csv_in_sql(paths, conn, curs):
