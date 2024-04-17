@@ -51,7 +51,7 @@ DATABASE_COLUMNS_AND_DATA_TYPES = [
 ]
 
 CHROME_USER_DATA_DIR = r"C:\Users\KianGosling\AppData\Local\Google\Chrome\User Data"
-SCREAMINGFROG_CSV_PATH = [r"C:\Users\KianGosling\Music\Kununu\benutzerdefinierte_extraktion_alle.csv"]
+SCREAMINGFROG_CSV_PATH = [r"C:\Users\KianGosling\Music\Kununu\benutzerdefinierte_extraktion_alle.csv", r"C:\Users\KianGosling\Music\Indeed\benutzerdefinierte_extraktion_alle.csv", r"C:\Users\KianGosling\Music\Glassdoor\benutzerdefinierte_extraktion_alle.csv"]
 
 GAIA_DEPLOYMENT_ID = "gpt-35-turbo-0301"
 API_VERSION = "2023-05-15"
@@ -69,6 +69,13 @@ zu wahren. Dein Ziel ist es, eine offene, verständnisvolle und positive Kommuni
 das Engagement und das Wohlbefinden der Mitarbeiter widerspiegelt, während du gleichzeitig das positive 
 Image von DHL als Arbeitgeber stärkst. Formulieren Sie nun eine passende Antwort auf diese 
 Unternehmensbewertung von Indeed: \n''' # \n ist wichtig!
+EVAL_PROMPT = "give me a json object with 4 random int values with no additional text"
+GAIA_URL = f"https://apihub.dhl.com/genai/openai/deployments/{GAIA_DEPLOYMENT_ID}/completions"
+GAIA_QUERYSTRING = {"api-version":API_VERSION}
+GAIA_HEADERS = {
+            "content-type": "application/json",
+            "api-key": API_KEY
+    }
 
 # Data Structures 
 queue = list()
@@ -117,7 +124,7 @@ def sql_insert_row(table_name, row, curs):
         insert_string += "?,"
     insert_string = insert_string[:-1]
     insert_string += ");"
-    curs.execute(insert_string, 
+    curs.execute(insert_string, # Wär cool, wenn wir hier einfach "row" übergeben könnten, doch dann wird index mitgegeben
                 row.Portal, 
                 row.ID, 
                 row.Link, 
@@ -148,6 +155,34 @@ def sql_insert_row(table_name, row, curs):
                 row.WeightedScore, 
                 )
 
+def evaluate_response(row):
+    gaia_payload = {
+        "prompt": EVAL_PROMPT , # Specify format together with Weichert
+            "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
+            "temperature": 0, # Higher number = more risks
+            "top_p": 0.0, # Similar to temperature
+            #"logit_bias": {},
+            #"user": "string",
+            "n": 1, # Number of responses
+            "stream": False, # Stream partial progress
+            #"logprobs": None,
+            #"suffix": "", # After input or output string
+            #"echo": False, # Echo prompt 
+            #"stop": "",    
+            #"completion_config": "string",
+            #"presence_penalty": 0,
+            #"frequency_penalty": 0,
+            #"best_of": 0
+    }
+    response = requests.request("POST", GAIA_URL, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
+    json_derulo = json.loads(response.text)['choices'][0]
+    try: 
+        row.EmpathyScore = json_derulo["int1"]
+    except: 
+        print("Evaluation of responses failed!")
+    
+    a = 5
+
 def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped data
 
     # TODO
@@ -157,58 +192,59 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
     #   - Some fields will be missing completely, since this information is not available on Indeed or Glassdoor's site. Just orient yourself based on the information present in the CSV that ScreamingFrog exports
     #   - The Glassdoor and Indeed Screaming Frog configs are very messy (e.g. multiple reviews in one line), the Kununu config is much more representative of what the final CSVs should look like. So use the Kununu column names and general structure for reference.
 
-    for index in range(len(src.index)):
+    for row in src.itertuples():
         if("Kununu" in csv_path):
-            dest.at[index, "Portal"] = "Kununu"
-            dest.at[index, "ID"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            dest.at[index, "ReviewTitle"] = src.at[index, "ReviewTitle"]
+            dest.at[row.Index, "Portal"] = "Kununu"
+            dest.at[row.Index, "ID"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            dest.at[row.Index, "ReviewTitle"] = src.at[row.Index, "ReviewTitle"]
             #OverallSatisfaction done later
-            dest.at[index, "JobTitle"] = src.at[index, "JobTitle"]
-            department = re.search('im Bereich (.+?) bei', src.at[index, "Location"])
+            dest.at[row.Index, "JobTitle"] = src.at[row.Index, "JobTitle"]
+            department = re.search('im Bereich (.+?) bei', src.at[row.Index, "Location"])
             if department:
-                dest.at[index, "Department"] = department.group(1)
-            if "Ex-" in src.at[index, "JobTitle"]:
-                dest.at[index, "CurrentFormerEmployee"] = "Former"
-            elif "Bewerber" in src.at[index, "JobTitle"]:
-                dest.at[index, "CurrentFormerEmployee"] = None
+                dest.at[row.Index, "Department"] = department.group(1)
+            if "Ex-" in src.at[row.Index, "JobTitle"]:
+                dest.at[row.Index, "CurrentFormerEmployee"] = "Former"
+            elif "Bewerber" in src.at[row.Index, "JobTitle"]:
+                dest.at[row.Index, "CurrentFormerEmployee"] = None
             else: 
-                dest.at[index, "CurrentFormerEmployee"] = "Current"
-            year = re.search('20(.+?) ', src.at[index, "Location"])
-            if year and dest.at[index, "CurrentFormerEmployee"]: # CurrentFormerEmployee so that Bewerbende don't get included
-                dest.at[index, "ContractTerminationKununuOnly"] = "20" + year.group(1)
-            location = re.search('in (.+?) gearbeitet', src.at[index, "Location"])
+                dest.at[row.Index, "CurrentFormerEmployee"] = "Current"
+            year = re.search('20(.+?) ', src.at[row.Index, "Location"])
+            if year and dest.at[row.Index, "CurrentFormerEmployee"]: # CurrentFormerEmployee so that Bewerbende don't get included
+                dest.at[row.Index, "ContractTerminationKununuOnly"] = "20" + year.group(1)
+            location = re.search('in (.+?) gearbeitet', src.at[row.Index, "Location"])
             if location:
-                dest.at[index, "Location"] = location.group(1)
-            dest.at[index, "ReviewText"] = src.at[index, "ReviewText"]
+                dest.at[row.Index, "Location"] = location.group(1)
+            dest.at[row.Index, "ReviewText"] = src.at[row.Index, "ReviewText"]
             # TODO: Positive and negative aspects?
             # Sensitive Topic decided by GAIA
-            dest.at[index, "Response"] = src.at[index, "Response"]
-            if src.at[index, "Response"]:
-                dest.at[index, "ResponseYesNo"] = "Yes"
-                dest.at[index, "EstResponseDate"] = datetime.date.today() - datetime.timedelta(1)#src.at[index, "ResponseDate"]
-                # If no score, evaluate with GAIA (TODO)
-            else:
-                dest.at[index, "ResponseYesNo"] = "No"
+            dest.at[row.Index, "Response"] = src.at[row.Index, "Response"]
             
         elif("Glassdoor" in csv_path): 
-            dest.at[index, "Portal"] = "Glassdoor"
-            id = re.search('Bewertungen-DHL-(.+?).htm', src.at[index, "Link"])
+            dest.at[row.Index, "Portal"] = "Glassdoor"
+            id = re.search('Bewertungen-DHL-(.+?).htm', src.at[row.Index, "Link"])
             if id:
-                dest.at[index, "ID"] = id.group(1)
-            dest.at[index, "Link"] = "https://glassdoor.de" + src.at[index, "Link"]
+                dest.at[row.Index, "ID"] = id.group(1)
+            dest.at[row.Index, "Link"] = "https://glassdoor.de" + src.at[row.Index, "Link"]
 
         elif("Indeed" in csv_path):
-            dest.at[index, "Portal"] = "Indeed"
-            id = re.search('id=(.+?)', src.at[index, "Link"])
+            dest.at[row.Index, "Portal"] = "Indeed"
+            id = re.search('id=(.+?)', src.at[row.Index, "Link"])
             if id:
-                dest.at[index, "ID"] = id.group(1)
-            dest.at[index, "Link"] = "https://de.indeed.com" + src.at[index, "Link"] # Links scraped are relative links
+                dest.at[row.Index, "ID"] = id.group(1)
+            dest.at[row.Index, "Link"] = "https://de.indeed.com" + src.at[row.Index, "Link"] # Links scraped are relative links
 
         else:
-            print("Fehler beim Dateipfad!")
+            print("Fehler beim Dateipfad!") # Turn into Exception??
         
-        dest.at[index, "ReviewDate"] = datetime.date.today() - datetime.timedelta(1) # Yesterday's date
-        dest.at[index, "OverallSatisfaction"] = float((src.at[index, "OverallSatisfaction"]).replace(",", ".")) # Convert German float string to float datatype
+        dest.at[row.Index, "ReviewDate"] = datetime.date.today() - datetime.timedelta(1) # Yesterday's date
+        dest.at[row.Index, "OverallSatisfaction"] = float((src.at[row.Index, "OverallSatisfaction"]).replace(",", ".")) # Convert German float string to float datatype
+        if src.at[row.Index, "Response"]:
+            dest.at[row.Index, "ResponseYesNo"] = "Yes"
+            dest.at[row.Index, "EstResponseDate"] = datetime.date.today() - datetime.timedelta(1)#src.at[row.Index, "ResponseDate"]
+            # If no score, evaluate with GAIA (TODO)
+            evaluate_response(row)
+        else:
+            dest.at[row.Index, "ResponseYesNo"] = "No"
 
 def put_csv_in_sql(paths, conn, curs):
     df = pandas.DataFrame() # DataFrame to be added to Staging table
@@ -218,13 +254,12 @@ def put_csv_in_sql(paths, conn, curs):
         except: 
             print("CSV File not found, Path may be incorrect, File may be missing, or File may be using wrong encoding.")
         src = pandas.DataFrame(data).astype(str)
-        src.columns = src.columns.str.replace(' 1', '')
+        src.columns = src.columns.str.replace(' 1', '') # clean up Screamingfrog BS
         if(len(src.index) == 0): # Skip if empty
             continue
-        for field in DATABASE_COLUMNS_AND_DATA_TYPES:
+        for field in DATABASE_COLUMNS_AND_DATA_TYPES: # init columns
             df.at[0, field[0]] = None
-        process_scraped_data(src, df, path) # Clean up data, derive missing data
-        print(df) # for debugging
+        process_scraped_data(src, df, path)
         for row in df.itertuples():
             sql_insert_row(SQL_STAGING_TABLE_NAME, row, curs)
             if row.Index % 10 == 9: # Commit records every 10 rows in case of crash or something
@@ -233,7 +268,7 @@ def put_csv_in_sql(paths, conn, curs):
         # Commit new rows to main table (ignore dupes) and empty staging table
         curs.execute(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME} staging WHERE staging.ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});")
         conn.commit()
-        curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME}")
+        curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME};")
         conn.commit
 
 def fetch_new_reviews(queue):
@@ -250,12 +285,6 @@ def fetch_new_reviews(queue):
         print(exception)
 
 def generate_responses(reviews, errors):
-    gaia_url = f"https://apihub.dhl.com/genai/openai/deployments/{GAIA_DEPLOYMENT_ID}/completions"
-    gaia_querystring = {"api-version":API_VERSION}
-    headers = {
-            "content-type": "application/json",
-            "api-key": API_KEY
-    }
     for review in reviews:
         gaia_payload = {
             "prompt": PROMPT_PREFIX + review.get('ReviewText') + "<|endoftext|>", #review.get('Rating'), # Specify format together with Weichert
@@ -276,11 +305,11 @@ def generate_responses(reviews, errors):
             #"best_of": 0
         }
         # TODO: SQL Datenbank "Rating" bereinigen, aktuell sind noch sehr viele numerischen Werte drin, die keinen längenren
-        response = requests.request("POST", gaia_url, json=gaia_payload, headers=headers, params=gaia_querystring)
+        response = requests.request("POST", GAIA_URL, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
         match response.status_code:
             case 200: # Success (Handle fail codes?)
-                review['Answer (text)'] = json.loads(response.text)['choices'][0]['text']
-                review['Answer (yes / no )'] = "Yes"
+                review['Response'] = json.loads(response.text)['choices'][0]['text']
+                review['ResponseYesNo'] = "Yes"
             case other: # TODO Handle other HTTP Codes?
                 print("other")
                 reviews.remove(review) # Do not give to upload method
@@ -309,7 +338,7 @@ def upload_responses(reviews, errors):
                 next_elem.click()
             if review.get('Platform') == 'Glassdoor': # Glassdoor 
                 next_elem = driver.find_element(By.XPATH, '//*[@id="empReview_54905531"]/div/div[3]/a/button') # Comment button
-            if review.get('Platform') == 'kununu': # Kununu 
+            if review.get('Platform') == 'Kununu': # Kununu 
                 next_elem = driver.find_element(By.XPATH, "//*[@id='__next']/div/div[1]/main/div/div[4]/div/article[1]/div/div/div[17]/a") # Comment button
                 next_elem.click() 
                 timer(random.uniform(3.0, 5.0)) # Wait for page to reload
