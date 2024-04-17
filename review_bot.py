@@ -9,9 +9,10 @@ import random
 import json
 import re
 import datetime
+import dateparser
 
 # Constants
-MSSQL_DRIVER = 'SQL Server' # Alternative: ODBC Driver 18 for SQL Server
+MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
 SQL_SERVER_NAME = r"85.215.196.5"
 DATABASE = 'master'
 SQL_TABLE_NAME = 'DHL_SCHEMA'#'CC_DATA'
@@ -22,7 +23,7 @@ DATABASE_COLUMNS_AND_DATA_TYPES = [
     ("Portal", "nvarchar(10)"), # Derived from SCREAMINGFROG_CSV_PATH
     ("ID", "nvarchar(50)"), # Derived from relative link
     ("Link", "nvarchar(255)"), # Derived from relative link and domain
-    ("ReviewTitle", "nvarchar(50)"), # Scraped
+    ("ReviewTitle", "nvarchar(255)"), # Scraped
     ("ReviewDate", "date"), # Scraped (bad format, can I please just use system clock, we will be scraping at least once a day)
     ("OverallSatisfaction", "float"), # Scraped (Change comma to period)
     ("JobTitle", "nvarchar(50)"), # Scraped, cleanup necessary
@@ -152,11 +153,12 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
         if("Kununu" in csv_path):
             dest.at[index, "Portal"] = "Kununu"
             # TODO: ID and Link? (Waiting on Elena)
+            dest.at[index, "ID"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             dest.at[index, "ReviewTitle"] = src.at[index, "ReviewTitle"]
-            dest.at[index, "Date"] = src.at[index, "Date"]
+            #dest.at[index, "ReviewDate"] = src.at[index, "ReviewDate"] # Today's date?
             #OverallSatisfaction done later
             dest.at[index, "JobTitle"] = src.at[index, "JobTitle"]
-            department = re.search('im Bereich (.+?) bei', src.at[index, "JobTitle"])
+            department = re.search('im Bereich (.+?) bei', src.at[index, "Location"])
             if department:
                 dest.at[index, "Department"] = department.group(1)
             if "Ex-" in src.at[index, "JobTitle"]:
@@ -165,19 +167,19 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
                 dest.at[index, "CurrentFormerEmployee"] = None
             else: 
                 dest.at[index, "CurrentFormerEmployee"] = "Current"
-            year = re.search('20(.+?) ', src.at[index, "JobTitle"])
-            if year and dest.at[index, "CurrentFormerEmployee"]:
+            year = re.search('20(.+?) ', src.at[index, "Location"])
+            if year and dest.at[index, "CurrentFormerEmployee"]: # CFE so that Bewerbende don't get included
                 dest.at[index, "ContractTerminationKununuOnly"] = "20" + year.group(1)
-            location = re.search('in (.+?) gearbeitet', src.at[index, "JobTitle"])
+            location = re.search('in (.+?) gearbeitet', src.at[index, "Location"])
             if location:
-                dest.at[index, "Location"] = "20" + location.group(1)
+                dest.at[index, "Location"] = location.group(1)
             dest.at[index, "ReviewText"] = src.at[index, "ReviewText"]
             # TODO: Positive and negative aspects?
             # Sensitive Topic decided by GAIA
             dest.at[index, "Response"] = src.at[index, "Response"]
             if src.at[index, "Response"]:
                 dest.at[index, "ResponseYesNo"] = "Yes"
-                dest.at[index, "EstResponseDate"] = src.at[index, "EstResponseDate"]
+                dest.at[index, "EstResponseDate"] = datetime.date.today() - datetime.timedelta(1)#src.at[index, "ResponseDate"]
                 # If no score, evaluate with GAIA
             else:
                 dest.at[index, "ResponseYesNo"] = "No"
@@ -201,8 +203,9 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             print("Fehler beim Dateipfad!")
         
         # TODO: Caluclate date like this?
-        #dest.at[index, "Date"] = datetime.date.today() - datetime.timedelta(1) # Yesterday's date
-        dest.at[index, "OverallSatisfaction"] = float((src.at[index, "OverallSatisfaction 1"]).replace(",", "."))
+        dest.at[index, "ReviewDate"] = datetime.date.today() - datetime.timedelta(1) # Yesterday's date
+        
+        dest.at[index, "OverallSatisfaction"] = float((src.at[index, "OverallSatisfaction"]).replace(",", "."))
 
 def put_csv_in_sql(paths, conn, curs):
     df = pandas.DataFrame() # DataFrame to be added to Staging table
@@ -212,15 +215,22 @@ def put_csv_in_sql(paths, conn, curs):
         except: 
             print("CSV File not found, Path may be incorrect, File may be missing, or File may be using wrong encoding.")
         src = pandas.DataFrame(data).astype(str)
-        src.columns = src.columns.str.replace(' ', '')
+        src.columns = src.columns.str.replace(' 1', '')
         if(len(src.index) == 0): # Skip if empty
             continue
+        for field in DATABASE_COLUMNS_AND_DATA_TYPES:
+            df.at[0, field[0]] = None
         process_scraped_data(src, df, path) # Clean up data, derive missing data
         print(df) # for debugging
         for row in df.itertuples():
             sql_insert_row(SQL_STAGING_TABLE_NAME, row, curs)
-            if row.index % 10 == 9: # Commit records every 10 rows
+            if row.Index % 10 == 9: # Commit records every 10 rows in case of crash or something
                 conn.commit()
+        conn.commit()
+        # Commit new rows to main table (ignore dupes) and empty staging table
+        curs.execute(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME} staging WHERE staging.ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});")
+        conn.commit()
+        curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME}")
         conn.commit()
 
 def fetch_new_reviews(queue):
