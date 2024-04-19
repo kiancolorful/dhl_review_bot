@@ -69,7 +69,16 @@ zu wahren. Dein Ziel ist es, eine offene, verständnisvolle und positive Kommuni
 das Engagement und das Wohlbefinden der Mitarbeiter widerspiegelt, während du gleichzeitig das positive 
 Image von DHL als Arbeitgeber stärkst. Formulieren Sie nun eine passende Antwort auf diese 
 Unternehmensbewertung von Indeed: \n''' # \n ist wichtig!
-EVAL_PROMPT = "give me a json object with 4 random int values with no additional text"
+EVAL_PROMPT = '''fill out the following JSON object with random int values between 1 and 5: 
+{
+"EmpathyScore":
+"HelpfulnessScore":
+"IndividualityScore":
+"ResponseTimeScore":
+}
+
+do not provide any additional text.
+'''
 GAIA_URL = f"https://apihub.dhl.com/genai/openai/deployments/{GAIA_DEPLOYMENT_ID}/completions"
 GAIA_QUERYSTRING = {"api-version":API_VERSION}
 GAIA_HEADERS = {
@@ -175,13 +184,18 @@ def evaluate_response(row):
             #"best_of": 0
     }
     response = requests.request("POST", GAIA_URL, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
-    json_derulo = json.loads(response.text)['choices'][0]
-    try: 
-        row.EmpathyScore = json_derulo["int1"]
-    except: 
-        print("Evaluation of responses failed!")
-    
-    a = 5
+    try:
+        text = json.loads(response.text)["choices"][0]["text"].replace("\n", "")
+        scores = re.search("(\{.*?\})", text)#
+        if not scores:
+            return
+        scores = json.loads(scores.group(1))
+        row.EmpathyScore = scores["EmpathyScore"]
+        row.HelpfulnessScore = scores["HelpfulnessScore"]
+        row.IndividualityScore = scores["IndividualityScore"]
+        row.ResponseTimeScore = scores["ResponseTimeScore"]
+    except:
+        print("Error: Processing scores failed!")
 
 def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped data
 
@@ -242,12 +256,18 @@ def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped 
             dest.at[row.Index, "ResponseYesNo"] = "Yes"
             dest.at[row.Index, "EstResponseDate"] = datetime.date.today() - datetime.timedelta(1)#src.at[row.Index, "ResponseDate"]
             # If no score, evaluate with GAIA (TODO)
-            evaluate_response(row)
+            evaluate_response(dest.iloc[row.Index])
         else:
             dest.at[row.Index, "ResponseYesNo"] = "No"
 
-def put_csv_in_sql(paths, conn, curs):
+def new_dataframe():
     df = pandas.DataFrame() # DataFrame to be added to Staging table
+    for field in DATABASE_COLUMNS_AND_DATA_TYPES: # init columns
+        df.at[0, field[0]] = None
+    return df
+
+def put_csv_in_sql(paths, conn, curs):
+    df = new_dataframe()
     for path in paths:
         try: 
             data = pandas.read_csv(path)
@@ -257,8 +277,6 @@ def put_csv_in_sql(paths, conn, curs):
         src.columns = src.columns.str.replace(' 1', '') # clean up Screamingfrog BS
         if(len(src.index) == 0): # Skip if empty
             continue
-        for field in DATABASE_COLUMNS_AND_DATA_TYPES: # init columns
-            df.at[0, field[0]] = None
         process_scraped_data(src, df, path)
         for row in df.itertuples():
             sql_insert_row(SQL_STAGING_TABLE_NAME, row, curs)
@@ -271,7 +289,7 @@ def put_csv_in_sql(paths, conn, curs):
         curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME};")
         conn.commit
 
-def fetch_new_reviews(queue):
+def fetch_unanswered_reviews(queue):
     try:
         connection = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
         cursor = connection.cursor()
