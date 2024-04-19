@@ -289,14 +289,12 @@ def put_csv_in_sql(paths, conn, curs):
         curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME};")
         conn.commit
 
-def fetch_unanswered_reviews(queue):
+def fetch_unanswered_reviews(curs):
+    df = new_dataframe()
     try:
-        connection = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
-        cursor = connection.cursor()
-        put_csv_in_sql(SCREAMINGFROG_CSV_PATH, connection, cursor)
-        cursor.execute(f"SELECT * FROM {SQL_TABLE_NAME} WHERE [AnswerYesNo]='No'")
-        result = cursor.fetchall()
-        columns = [column[0] for column in cursor.description]
+        curs.execute(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ResponseYesNo='No'")
+        result = curs.fetchall()
+        columns = [column[0] for column in curs.description]
         for row in result:
             queue.append(dict(zip(columns, row)))
     except pyodbc.Error as exception:
@@ -388,7 +386,10 @@ def update_sql_entries(reviews):
         print(exception)
 
 # Main (TODO)
-fetch_new_reviews(queue)
+conn = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
+curs = conn.cursor()
+#put_csv_in_sql(SCREAMINGFROG_CSV_PATH, conn, curs)
+df = fetch_unanswered_reviews(curs)
 if(len(queue) != 0):
     generate_responses(queue, error_queue) # Feed reviews into GAIA to obtain response (EVALUATE RESPONSE)
     upload_responses(queue, error_queue) # Upload GAIA's responses
