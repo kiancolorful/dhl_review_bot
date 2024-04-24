@@ -393,10 +393,11 @@ def extract_new_reviews(portal, since):
         case "indeed":
             while(True):
                 response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/indeed?id=DHL&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 20}")
-                response = response.replace("\n", "")
-                response = response.replace("\r", " ")
-                #time.sleep(1) # Avoid rate limiting
-                json_data = json.loads(response)
+                responsetext = response.text.replace("\n", "")
+                responsetext = responsetext.replace("\r", " ")
+                time.sleep(1) # Avoid rate limiting
+                json_data = json.loads(responsetext)
+                json_data["reviews"].pop(0)
                 for review in json_data["reviews"]:
                     if(datetime.datetime.strptime(review["datetime"], "%Y-%m-%dT%H:%M:%S") < since): # Review is old, return datafram as-is
                         df = pandas.DataFrame(list_of_dicts)
@@ -500,10 +501,10 @@ def extract_new_reviews(portal, since):
                                     }
                             }
                             '''
-                response = response.replace("\n", "")
-                response = response.replace("\r", " ")
+                responsetext = response.text.replace("\n", "")
+                responsetext = responsetext.replace("\r", " ")
                 time.sleep(1) # Avoid rate limiting
-                json_data = json.loads(response)
+                json_data = json.loads(responsetext)
                 
                 for review in json_data["reviews"]:
                     if(datetime.datetime.strptime(review["datetime"], "%Y-%m-%dT%H:%M:%S.%f") < since): # Review is old, return datafram as-is
@@ -544,7 +545,7 @@ def extract_new_reviews(portal, since):
 
 # Main (TODO)
 
-extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(5000))
+extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
 conn = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
 curs = conn.cursor()
 #put_csv_in_sql(SCREAMINGFROG_CSV_PATH, conn, curs)
