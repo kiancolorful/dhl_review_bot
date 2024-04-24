@@ -1,5 +1,8 @@
 import requests
 
+
+
+
 url = "https://apihub.dhl.com/genai/openai/deployments/gpt-35-turbo-0301/completions"
 
 querystring = {"api-version":"2023-05-15"}

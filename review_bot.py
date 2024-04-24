@@ -19,39 +19,40 @@ SQL_TABLE_NAME = 'DHL_SCHEMA'#'CC_DATA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
 USER = 'kian'
 PW = 'Gosling1'
-DATABASE_COLUMNS_AND_DATA_TYPES = [
-    ("Portal", "nvarchar(10)"), # Derived from SCREAMINGFROG_CSV_PATH
-    ("ID", "nvarchar(50)"), # Derived from relative link
-    ("Link", "nvarchar(255)"), # Derived from relative link and domain
-    ("ReviewTitle", "nvarchar(255)"), # Scraped
-    ("ReviewDate", "date"), # Scraped (bad format, can I please just use system clock, we will be scraping at least once a day)
-    ("OverallSatisfaction", "float"), # Scraped (Change comma to period)
-    ("JobTitle", "nvarchar(50)"), # Scraped, cleanup necessary
-    ("Department", "nvarchar(50)"), # Scraped, bad format TODO: nur bei kununu?
-    ("CurrentFormerEmployee", "nvarchar(10)"), # Scraped
-    ("ContractTerminationKununuOnly", "int"), # ????? 
-    ("Location", "nvarchar(50)"), # Scraped (bad format with Glassdoor, State Included)
-    ("StateRegion", "nvarchar(50)"), # PowerBI takes care of it, leave blank
-    ("Country", "nvarchar(50)"), # PowerBI takes care of it, leave blank
-    ("ReviewText1", "nvarchar(MAX)"), # Scraped 
-    ("ReviewText2", "nvarchar(MAX)"), 
-    ("ReviewText", "nvarchar(MAX)"), 
-    ("MainpositiveAspect", "nvarchar(255)"), 
-    ("MainAreaofImprovement", "nvarchar(255)"), 
-    ("SensitiveTopic", "nvarchar(10)"), 
-    ("ResponseYesNo", "nvarchar(10)"), 
-    ("Response", "nvarchar(MAX)"), 
-    ("EstResponseDate", "date"), 
-    ("EmpathyScore", "float"), 
-    ("HelpfulnessScore", "float"), 
-    ("IndividualityScore", "float"), 
-    ("ResponseTimeScore", "float"), 
-    ("OverallScore", "float"), 
-    ("WeightedScore", "float")
-]
+DATABASE_COLUMNS_AND_DATA_TYPES = {
+    "Portal": "nvarchar(10)", # Derived from SCREAMINGFROG_CSV_PATH
+    "ID": "nvarchar(50)", # Derived from relative link
+    "Link": "nvarchar(255)", # Derived from relative link and domain
+    "ReviewTitle": "nvarchar(255)", # Scraped
+    "ReviewDate": "date", # Scraped (bad format, can I please just use system clock, we will be scraping at least once a day)
+    "OverallSatisfaction": "float", # Scraped (Change comma to period)
+    "JobTitle": "nvarchar(50)", # Scraped, cleanup necessary
+    "Department": "nvarchar(50)", # Scraped, bad format TODO: nur bei kununu?
+    "CurrentFormerEmployee": "nvarchar(10)", # Scraped
+    "ContractTerminationKununuOnly": "int", # ????? 
+    "Location": "nvarchar(50)", # Scraped (bad format with Glassdoor, State Included)
+    "StateRegion": "nvarchar(50)", # PowerBI takes care of it, leave blank
+    "Country": "nvarchar(50)", # PowerBI takes care of it, leave blank
+    "ReviewText1": "nvarchar(MAX)", # Scraped 
+    "ReviewText2": "nvarchar(MAX)", 
+    "ReviewText": "nvarchar(MAX)", 
+    "MainpositiveAspect": "nvarchar(255)", 
+    "MainAreaofImprovement": "nvarchar(255)", 
+    "SensitiveTopic": "nvarchar(10)", 
+    "ResponseYesNo": "nvarchar(10)", 
+    "Response": "nvarchar(MAX)", 
+    "EstResponseDate": "date", 
+    "EmpathyScore": "float", 
+    "HelpfulnessScore": "float", 
+    "IndividualityScore": "float", 
+    "ResponseTimeScore": "float", 
+    "OverallScore": "float", 
+    "WeightedScore": "float"
+}
 
 CHROME_USER_DATA_DIR = r"C:\Users\KianGosling\AppData\Local\Google\Chrome\User Data"
 SCREAMINGFROG_CSV_PATH = [r"C:\Users\KianGosling\Music\Kununu\benutzerdefinierte_extraktion_alle.csv", r"C:\Users\KianGosling\Music\Indeed\benutzerdefinierte_extraktion_alle.csv", r"C:\Users\KianGosling\Music\Glassdoor\benutzerdefinierte_extraktion_alle.csv"]
+WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
 
 GAIA_DEPLOYMENT_ID = "gpt-35-turbo-0301"
 API_VERSION = "2023-05-15"
@@ -385,7 +386,165 @@ def update_sql_entries(reviews):
     except pyodbc.Error as exception:
         print(exception)
 
+def extract_new_reviews(portal, since):
+    pagenum = 0
+    list_of_dicts = []
+    match portal.lower():
+        case "indeed":
+            while(True):
+                response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/indeed?id=DHL&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 20}")
+                response = response.replace("\n", "")
+                response = response.replace("\r", " ")
+                #time.sleep(1) # Avoid rate limiting
+                json_data = json.loads(response)
+                for review in json_data["reviews"]:
+                    if(datetime.datetime.strptime(review["datetime"], "%Y-%m-%dT%H:%M:%S") < since): # Review is old, return datafram as-is
+                        df = pandas.DataFrame(list_of_dicts)
+                        return df
+                    row = dict.fromkeys(DATABASE_COLUMNS_AND_DATA_TYPES)
+                    row["Portal"] = "Indeed"
+                    row["ID"] = review["id"]
+                    row["Link"] = review["url"]
+                    row["ReviewTitle"] = review["title"]
+                    row["ReviewDate"] = datetime.datetime.strptime(review["datetime"], "%Y-%m-%dT%H:%M:%S")
+                    row["OverallSatisfaction"] = float(review["rating"])
+                    row["JobTitle"] = review["reviewer"]
+                    row["Department"] = None
+                    row["CurrentFormerEmployee"] = review["reviewer_employee_type"].split(' ', 1)[0]
+                    row["ContractTerminationKununuOnly"] = None
+                    row["Location"] = review["location"]
+                    row["StateRegion"] = None
+                    row["Country"] = None
+                    row["ReviewText1"] = review["pros"]
+                    row["ReviewText2"] = review["cons"]
+                    row["ReviewText"] = review["text"] # TODO: Check this
+                    row["MainpositiveAspect"] = None # ?????
+                    row["MainAreaofImprovement"] = None # ?????
+                    row["SensitiveTopic"] = "No" # To be checked later
+                    row["ResponseYesNo"] = "No"
+                    row["Response"] = None
+                    row["EstResponseDate"] = None
+                    list_of_dicts.append(row)
+
+                pagenum += 1 # Go to next page if all reviews on current page are new
+
+        case "glassdoor":
+            languages = ["en", "de", "es"] # Complete
+            # deutsch, englisch, niederländisch, italienisch, spanisch, französisch und portugiesisch
+            while(True):
+                # for lang in languages:
+                #response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/glassdoor?id=DHL&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 10}")
+                response = '''
+                                {
+                                    "reviews": [
+                                        {
+                                            "url": "https://www.glassdoor.com/Reviews/Employee-Review-Microsoft-RVW69762335.htm",
+                                            "rating": "4",
+                                            "title": "not bad",
+                                            "pros": "big company nice logo bill gates",
+                                            "cons": "too big impersonal bad consoles",
+                                            "advice": null,
+                                            "reviewer": "Sales Associate",
+                                            "datetime": "2022-10-04T13:32:07.730",
+                                            "language": "en",
+                                            "id": "69762335",
+                                            "culture_and_values_rating": "0",
+                                            "diversity_and_inclusion_rating": "0",
+                                            "work_life_balance_rating": "0",
+                                            "senior_management_rating": "0",
+                                            "compensation_and_benefits_rating": "0",
+                                            "career_opportunities_rating": "0",
+                                            "location": null,
+                                            "is_current_job": false,
+                                            "rating_ceo": null,
+                                            "rating_business_outlook": null,
+                                            "rating_recommend_to_friend": null
+                                        },
+                                        {
+                                            "url": "https://www.glassdoor.com/Reviews/Employee-Review-Microsoft-RVW69758641.htm",
+                                            "rating": "5",
+                                            "title": "Great employer",
+                                            "pros": "Interesting and varied career paths, great management, exciting products & services",
+                                            "cons": "Organizational complexity, highly matrixed decision-making processes",
+                                            "advice": "Simplify strategic decision making and get organizations closer aligned on big bets.",
+                                            "reviewer": "Sr Program Manager",
+                                            "datetime": "2022-10-04T11:55:17.380",
+                                            "language": "en",
+                                            "id": "69758641",
+                                            "culture_and_values_rating": "5",
+                                            "diversity_and_inclusion_rating": "4",
+                                            "work_life_balance_rating": "4",
+                                            "senior_management_rating": "4",
+                                            "compensation_and_benefits_rating": "4",
+                                            "career_opportunities_rating": "5",
+                                            "location": "Redmond, WA",
+                                            "is_current_job": true,
+                                            "rating_ceo": null,
+                                            "rating_business_outlook": "POSITIVE",
+                                            "rating_recommend_to_friend": "POSITIVE"
+                                        }
+                                    ],
+                                    "totals": {
+                                        "review_count": 43152,
+                                        "filtered_reviews_count": 41289,
+                                        "overall_rating": "4.4",
+                                        "culture_and_values_rating": "4.4",
+                                        "diversity_and_inclusion_rating": "4.5",
+                                        "work_life_balance_rating": "4.2",
+                                        "senior_management_rating": "4.1",
+                                        "compensation_and_benefits_rating": "4.1",
+                                        "career_opportunities_rating": "4.2",
+                                        "ceo_rating": "97%",
+                                        "business_outlook_rating": "86%",
+                                        "recommend_to_friend_rating": "91%"
+                                    }
+                            }
+                            '''
+                response = response.replace("\n", "")
+                response = response.replace("\r", " ")
+                time.sleep(1) # Avoid rate limiting
+                json_data = json.loads(response)
+                
+                for review in json_data["reviews"]:
+                    if(datetime.datetime.strptime(review["datetime"], "%Y-%m-%dT%H:%M:%S.%f") < since): # Review is old, return datafram as-is
+                        df = pandas.DataFrame(list_of_dicts)
+                        return df
+                    row = dict.fromkeys(DATABASE_COLUMNS_AND_DATA_TYPES)
+                    row["Portal"] = "Glassdoor"
+                    row["ID"] = review["id"]
+                    row["Link"] = review["url"]
+                    row["ReviewTitle"] = review["title"]
+                    row["ReviewDate"] = datetime.datetime.strptime(review["datetime"], "%Y-%m-%dT%H:%M:%S.%f")
+                    row["OverallSatisfaction"] = float(review["rating"])
+                    row["JobTitle"] = review["reviewer"]
+                    row["Department"] = None
+                    if(bool(review["is_current_job"])):
+                        row["CurrentFormerEmployee"] = "Current"
+                    else: 
+                        row["CurrentFormerEmployee"] = "Former"
+                    row["ContractTerminationKununuOnly"] = None
+                    row["Location"] = review["location"]
+                    row["StateRegion"] = None
+                    row["Country"] = None
+                    row["ReviewText1"] = review["pros"]
+                    row["ReviewText2"] = review["cons"]
+                    row["ReviewText"] = None # TODO: Check this
+                    row["MainpositiveAspect"] = None # ?????
+                    row["MainAreaofImprovement"] = None # ?????
+                    row["SensitiveTopic"] = "No" # To be checked later
+                    row["ResponseYesNo"] = "No"
+                    row["Response"] = None
+                    row["EstResponseDate"] = None
+                    list_of_dicts.append(row)
+                pagenum += 1 # Go to next page if all reviews on current page are new
+        # TODO: Add kununu
+        case other:
+            print("Error extracting reviews from Wextractor, did you spell the portal name correctly?")
+            return
+
 # Main (TODO)
+
+extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(5000))
 conn = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
 curs = conn.cursor()
 #put_csv_in_sql(SCREAMINGFROG_CSV_PATH, conn, curs)
