@@ -53,6 +53,7 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
 CHROME_USER_DATA_DIR = r"C:\Users\KianGosling\AppData\Local\Google\Chrome\User Data"
 SCREAMINGFROG_CSV_PATH = [r"C:\Users\KianGosling\Music\Kununu\benutzerdefinierte_extraktion_alle.csv", r"C:\Users\KianGosling\Music\Indeed\benutzerdefinierte_extraktion_alle.csv", r"C:\Users\KianGosling\Music\Glassdoor\benutzerdefinierte_extraktion_alle.csv"]
 WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
+MAX_PAGES = 2
 
 GAIA_DEPLOYMENT_ID = "gpt-35-turbo-0301"
 API_VERSION = "2023-05-15"
@@ -386,20 +387,30 @@ def update_sql_entries(reviews):
     except pyodbc.Error as exception:
         print(exception)
 
+def wex_string_to_datetime(str):
+    return datetime.datetime.strptime(str, "%Y-%m-%dT%H:%M:%S")
+
 def extract_new_reviews(portal, since):
-    pagenum = 0
     list_of_dicts = []
     match portal.lower():
         case "indeed":
-            while(True):
+            pagenum = 0
+            while(pagenum < MAX_PAGES):
                 response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/indeed?id=DHL&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 20}")
-                responsetext = response.text.replace("\n", "")
-                responsetext = responsetext.replace("\r", " ")
+                if(response.status_code < 200 or response.status_code > 299):
+                    print(f"Error connecting to Wexrtactor. Status code: {response.status_code}")
+                    return
+                responsetext = response.text.replace("\n", " ")
+                responsetext = responsetext.replace("\r", "")
                 time.sleep(1) # Avoid rate limiting
                 json_data = json.loads(responsetext)
-                json_data["reviews"].pop(0)
+
+                # Sometimes the top review is also scraped, discard it if it's an old one
+                if(wex_string_to_datetime(json_data["reviews"][0]["datetime"]) < datetime.datetime.now() - datetime.timedelta(7)):
+                    json_data["reviews"].pop(0) 
+
                 for review in json_data["reviews"]:
-                    if(datetime.datetime.strptime(review["datetime"], "%Y-%m-%dT%H:%M:%S") < since): # Review is old, return datafram as-is
+                    if(wex_string_to_datetime(review["datetime"]) < since): # Review is old, return dataframe as-is
                         df = pandas.DataFrame(list_of_dicts)
                         return df
                     row = dict.fromkeys(DATABASE_COLUMNS_AND_DATA_TYPES)
@@ -407,7 +418,7 @@ def extract_new_reviews(portal, since):
                     row["ID"] = review["id"]
                     row["Link"] = review["url"]
                     row["ReviewTitle"] = review["title"]
-                    row["ReviewDate"] = datetime.datetime.strptime(review["datetime"], "%Y-%m-%dT%H:%M:%S")
+                    row["ReviewDate"] = wex_string_to_datetime(review["datetime"].split('.', 1)[0]) 
                     row["OverallSatisfaction"] = float(review["rating"])
                     row["JobTitle"] = review["reviewer"]
                     row["Department"] = None
@@ -418,11 +429,11 @@ def extract_new_reviews(portal, since):
                     row["Country"] = None
                     row["ReviewText1"] = review["pros"]
                     row["ReviewText2"] = review["cons"]
-                    row["ReviewText"] = review["text"] # TODO: Check this
+                    row["ReviewText"] = review["text"] # TODO: Do we have to remove newlines?
                     row["MainpositiveAspect"] = None # ?????
                     row["MainAreaofImprovement"] = None # ?????
-                    row["SensitiveTopic"] = "No" # To be checked later
-                    row["ResponseYesNo"] = "No"
+                    row["SensitiveTopic"] = None # To be checked later
+                    row["ResponseYesNo"] = None
                     row["Response"] = None
                     row["EstResponseDate"] = None
                     list_of_dicts.append(row)
@@ -430,122 +441,57 @@ def extract_new_reviews(portal, since):
                 pagenum += 1 # Go to next page if all reviews on current page are new
 
         case "glassdoor":
-            languages = ["en", "de", "es"] # Complete
-            # deutsch, englisch, niederländisch, italienisch, spanisch, französisch und portugiesisch
-            while(True):
-                # for lang in languages:
-                #response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/glassdoor?id=DHL&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 10}")
-                response = '''
-                                {
-                                    "reviews": [
-                                        {
-                                            "url": "https://www.glassdoor.com/Reviews/Employee-Review-Microsoft-RVW69762335.htm",
-                                            "rating": "4",
-                                            "title": "not bad",
-                                            "pros": "big company nice logo bill gates",
-                                            "cons": "too big impersonal bad consoles",
-                                            "advice": null,
-                                            "reviewer": "Sales Associate",
-                                            "datetime": "2022-10-04T13:32:07.730",
-                                            "language": "en",
-                                            "id": "69762335",
-                                            "culture_and_values_rating": "0",
-                                            "diversity_and_inclusion_rating": "0",
-                                            "work_life_balance_rating": "0",
-                                            "senior_management_rating": "0",
-                                            "compensation_and_benefits_rating": "0",
-                                            "career_opportunities_rating": "0",
-                                            "location": null,
-                                            "is_current_job": false,
-                                            "rating_ceo": null,
-                                            "rating_business_outlook": null,
-                                            "rating_recommend_to_friend": null
-                                        },
-                                        {
-                                            "url": "https://www.glassdoor.com/Reviews/Employee-Review-Microsoft-RVW69758641.htm",
-                                            "rating": "5",
-                                            "title": "Great employer",
-                                            "pros": "Interesting and varied career paths, great management, exciting products & services",
-                                            "cons": "Organizational complexity, highly matrixed decision-making processes",
-                                            "advice": "Simplify strategic decision making and get organizations closer aligned on big bets.",
-                                            "reviewer": "Sr Program Manager",
-                                            "datetime": "2022-10-04T11:55:17.380",
-                                            "language": "en",
-                                            "id": "69758641",
-                                            "culture_and_values_rating": "5",
-                                            "diversity_and_inclusion_rating": "4",
-                                            "work_life_balance_rating": "4",
-                                            "senior_management_rating": "4",
-                                            "compensation_and_benefits_rating": "4",
-                                            "career_opportunities_rating": "5",
-                                            "location": "Redmond, WA",
-                                            "is_current_job": true,
-                                            "rating_ceo": null,
-                                            "rating_business_outlook": "POSITIVE",
-                                            "rating_recommend_to_friend": "POSITIVE"
-                                        }
-                                    ],
-                                    "totals": {
-                                        "review_count": 43152,
-                                        "filtered_reviews_count": 41289,
-                                        "overall_rating": "4.4",
-                                        "culture_and_values_rating": "4.4",
-                                        "diversity_and_inclusion_rating": "4.5",
-                                        "work_life_balance_rating": "4.2",
-                                        "senior_management_rating": "4.1",
-                                        "compensation_and_benefits_rating": "4.1",
-                                        "career_opportunities_rating": "4.2",
-                                        "ceo_rating": "97%",
-                                        "business_outlook_rating": "86%",
-                                        "recommend_to_friend_rating": "91%"
-                                    }
-                            }
-                            '''
-                responsetext = response.text.replace("\n", "")
-                responsetext = responsetext.replace("\r", " ")
-                time.sleep(1) # Avoid rate limiting
-                json_data = json.loads(responsetext)
-                
-                for review in json_data["reviews"]:
-                    if(datetime.datetime.strptime(review["datetime"], "%Y-%m-%dT%H:%M:%S.%f") < since): # Review is old, return datafram as-is
-                        df = pandas.DataFrame(list_of_dicts)
-                        return df
-                    row = dict.fromkeys(DATABASE_COLUMNS_AND_DATA_TYPES)
-                    row["Portal"] = "Glassdoor"
-                    row["ID"] = review["id"]
-                    row["Link"] = review["url"]
-                    row["ReviewTitle"] = review["title"]
-                    row["ReviewDate"] = datetime.datetime.strptime(review["datetime"], "%Y-%m-%dT%H:%M:%S.%f")
-                    row["OverallSatisfaction"] = float(review["rating"])
-                    row["JobTitle"] = review["reviewer"]
-                    row["Department"] = None
-                    if(bool(review["is_current_job"])):
-                        row["CurrentFormerEmployee"] = "Current"
-                    else: 
-                        row["CurrentFormerEmployee"] = "Former"
-                    row["ContractTerminationKununuOnly"] = None
-                    row["Location"] = review["location"]
-                    row["StateRegion"] = None
-                    row["Country"] = None
-                    row["ReviewText1"] = review["pros"]
-                    row["ReviewText2"] = review["cons"]
-                    row["ReviewText"] = None # TODO: Check this
-                    row["MainpositiveAspect"] = None # ?????
-                    row["MainAreaofImprovement"] = None # ?????
-                    row["SensitiveTopic"] = "No" # To be checked later
-                    row["ResponseYesNo"] = "No"
-                    row["Response"] = None
-                    row["EstResponseDate"] = None
-                    list_of_dicts.append(row)
-                pagenum += 1 # Go to next page if all reviews on current page are new
+            languages = ["de", "en", "nl", "it", "es", "fr", "pt"] # ISO 639
+            for lang in languages:
+                pagenum = 0
+                while(pagenum < MAX_PAGES): 
+                    response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/glassdoor?id=650250&language={lang}&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 10}")
+                    responsetext = response.text.replace("\n", " ")
+                    responsetext = responsetext.replace("\r", "")
+                    time.sleep(1) # Avoid rate limiting
+                    json_data = json.loads(responsetext)
+                    
+                    for review in json_data["reviews"]:
+                        if(wex_string_to_datetime(review["datetime"].split('.', 1)[0]) < since): # Review is old, move on to next language
+                            break
+                        row = dict.fromkeys(DATABASE_COLUMNS_AND_DATA_TYPES)
+                        row["Portal"] = "Glassdoor"
+                        row["ID"] = review["id"]
+                        row["Link"] = review["url"]
+                        row["ReviewTitle"] = review["title"]
+                        row["ReviewDate"] = wex_string_to_datetime(review["datetime"].split('.', 1)[0]) # Remove milliseconds
+                        row["OverallSatisfaction"] = float(review["rating"])
+                        row["JobTitle"] = review["reviewer"]
+                        row["Department"] = None
+                        if(bool(review["is_current_job"])):
+                            row["CurrentFormerEmployee"] = "Current"
+                        else: 
+                            row["CurrentFormerEmployee"] = "Former"
+                        row["ContractTerminationKununuOnly"] = None
+                        row["Location"] = review["location"]
+                        row["StateRegion"] = None
+                        row["Country"] = None
+                        row["ReviewText1"] = review["pros"]
+                        row["ReviewText2"] = review["cons"]
+                        row["ReviewText"] = None # TODO: Check this
+                        row["MainpositiveAspect"] = None # ?????
+                        row["MainAreaofImprovement"] = None # ?????
+                        row["SensitiveTopic"] = None # To be checked later
+                        row["ResponseYesNo"] = None
+                        row["Response"] = None
+                        row["EstResponseDate"] = None
+                        list_of_dicts.append(row)
+                    pagenum += 1 # Go to next page if all reviews on current page are new
+            df = pandas.DataFrame(list_of_dicts)
+            return df
         # TODO: Add kununu
         case other:
-            print("Error extracting reviews from Wextractor, did you spell the portal name correctly?")
+            print(f"Error extracting reviews from Wextractor, \"{portal}\" is not a supported portal.")
             return
 
 # Main (TODO)
 
-extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
+new_reviews_df = extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(7))
 conn = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
 curs = conn.cursor()
 #put_csv_in_sql(SCREAMINGFROG_CSV_PATH, conn, curs)
