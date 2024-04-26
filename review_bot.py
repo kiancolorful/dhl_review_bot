@@ -53,7 +53,7 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
 CHROME_USER_DATA_DIR = r"C:\Users\KianGosling\AppData\Local\Google\Chrome\User Data"
 SCREAMINGFROG_CSV_PATH = [r"C:\Users\KianGosling\Music\Kununu\benutzerdefinierte_extraktion_alle.csv", r"C:\Users\KianGosling\Music\Indeed\benutzerdefinierte_extraktion_alle.csv", r"C:\Users\KianGosling\Music\Glassdoor\benutzerdefinierte_extraktion_alle.csv"]
 WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
-MAX_PAGES = 2
+MAX_WEX_CALLS = 1
 
 GAIA_DEPLOYMENT_ID = "gpt-35-turbo-0301"
 API_VERSION = "2023-05-15"
@@ -88,33 +88,7 @@ GAIA_HEADERS = {
             "api-key": API_KEY
     }
 
-# Data Structures 
-queue = list()
-error_queue = list() # Fish failures out at every stage of pipeline, handle at end or store (REMOVE THIS?)
-
-
 # Methods
-def upload_demo(URL, review_response):
-    # Initialisieren
-    options = webdriver.ChromeOptions()
-    options.add_argument(r"--user-data-dir=C:\Users\kiang\AppData\Local\Google\Chrome\User Data") #e.g. C:\Users\You\AppData\Local\Google\Chrome\User Data
-    options.add_argument(r"--remote-debugging-port=9222")
-    driver = webdriver.Chrome(options=options)
-    timer(random.uniform(3.0, 5.0))
-
-    # Aufrufen 
-    driver.get(URL)
-    timer(random.uniform(3.0, 5.0))
-    next_elem = driver.find_element(By.XPATH, "//button[@class='css-1vapj3m e8ju0x50']")
-    next_elem.click()
-    timer(random.uniform(3.0, 5.0))
-    next_elem = driver.find_element(By.XPATH, "//textarea[@id='ifl-TextAreaFormField-:r0:']")
-    next_elem.send_keys(review_response)
-    timer(random.uniform(3.0, 5.0))
-    next_elem = driver.find_element(By.XPATH, "//button[@class='css-1orlm12 e8ju0x50']")
-    next_elem.click()
-    timer(10)
-
 def timer(secs):
     while secs > 0.0:
         print(str(secs) + "Sekunden")
@@ -166,146 +140,66 @@ def sql_insert_row(table_name, row, curs):
                 row.WeightedScore, 
                 )
 
-def evaluate_response(row):
-    gaia_payload = {
-        "prompt": EVAL_PROMPT , # Specify format together with Weichert
-            "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
-            "temperature": 0, # Higher number = more risks
-            "top_p": 0.0, # Similar to temperature
-            #"logit_bias": {},
-            #"user": "string",
-            "n": 1, # Number of responses
-            "stream": False, # Stream partial progress
-            #"logprobs": None,
-            #"suffix": "", # After input or output string
-            #"echo": False, # Echo prompt 
-            #"stop": "",    
-            #"completion_config": "string",
-            #"presence_penalty": 0,
-            #"frequency_penalty": 0,
-            #"best_of": 0
-    }
-    response = requests.request("POST", GAIA_URL, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
-    try:
-        text = json.loads(response.text)["choices"][0]["text"].replace("\n", "")
-        scores = re.search("(\{.*?\})", text)#
-        if not scores:
-            return
-        scores = json.loads(scores.group(1))
-        row.EmpathyScore = scores["EmpathyScore"]
-        row.HelpfulnessScore = scores["HelpfulnessScore"]
-        row.IndividualityScore = scores["IndividualityScore"]
-        row.ResponseTimeScore = scores["ResponseTimeScore"]
-    except:
-        print("Error: Processing scores failed!")
-
-def process_scraped_data(src, dest, csv_path): # Cleans and supplements scraped data
-
-    # TODO
-    # - Kununu ID and Link (Waiting on complete Kununu config from Elena)
-    # - Use actual upload and response dates instead of today's date (dateparser Module imported above, haven't used it yet tho)
-    # - Implement data cleaning for Indeed and Glassdoor
-    #   - Some fields will be missing completely, since this information is not available on Indeed or Glassdoor's site. Just orient yourself based on the information present in the CSV that ScreamingFrog exports
-    #   - The Glassdoor and Indeed Screaming Frog configs are very messy (e.g. multiple reviews in one line), the Kununu config is much more representative of what the final CSVs should look like. So use the Kununu column names and general structure for reference.
-
-    for row in src.itertuples():
-        if("Kununu" in csv_path):
-            dest.at[row.Index, "Portal"] = "Kununu"
-            dest.at[row.Index, "ID"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            dest.at[row.Index, "ReviewTitle"] = src.at[row.Index, "ReviewTitle"]
-            #OverallSatisfaction done later
-            dest.at[row.Index, "JobTitle"] = src.at[row.Index, "JobTitle"]
-            department = re.search('im Bereich (.+?) bei', src.at[row.Index, "Location"])
-            if department:
-                dest.at[row.Index, "Department"] = department.group(1)
-            if "Ex-" in src.at[row.Index, "JobTitle"]:
-                dest.at[row.Index, "CurrentFormerEmployee"] = "Former"
-            elif "Bewerber" in src.at[row.Index, "JobTitle"]:
-                dest.at[row.Index, "CurrentFormerEmployee"] = None
-            else: 
-                dest.at[row.Index, "CurrentFormerEmployee"] = "Current"
-            year = re.search('20(.+?) ', src.at[row.Index, "Location"])
-            if year and dest.at[row.Index, "CurrentFormerEmployee"]: # CurrentFormerEmployee so that Bewerbende don't get included
-                dest.at[row.Index, "ContractTerminationKununuOnly"] = "20" + year.group(1)
-            location = re.search('in (.+?) gearbeitet', src.at[row.Index, "Location"])
-            if location:
-                dest.at[row.Index, "Location"] = location.group(1)
-            dest.at[row.Index, "ReviewText"] = src.at[row.Index, "ReviewText"]
-            # TODO: Positive and negative aspects?
-            # Sensitive Topic decided by GAIA
-            dest.at[row.Index, "Response"] = src.at[row.Index, "Response"]
-            
-        elif("Glassdoor" in csv_path): 
-            dest.at[row.Index, "Portal"] = "Glassdoor"
-            id = re.search('Bewertungen-DHL-(.+?).htm', src.at[row.Index, "Link"])
-            if id:
-                dest.at[row.Index, "ID"] = id.group(1)
-            dest.at[row.Index, "Link"] = "https://glassdoor.de" + src.at[row.Index, "Link"]
-
-        elif("Indeed" in csv_path):
-            dest.at[row.Index, "Portal"] = "Indeed"
-            id = re.search('id=(.+?)', src.at[row.Index, "Link"])
-            if id:
-                dest.at[row.Index, "ID"] = id.group(1)
-            dest.at[row.Index, "Link"] = "https://de.indeed.com" + src.at[row.Index, "Link"] # Links scraped are relative links
-
-        else:
-            print("Fehler beim Dateipfad!") # Turn into Exception??
-        
-        dest.at[row.Index, "ReviewDate"] = datetime.date.today() - datetime.timedelta(1) # Yesterday's date
-        dest.at[row.Index, "OverallSatisfaction"] = float((src.at[row.Index, "OverallSatisfaction"]).replace(",", ".")) # Convert German float string to float datatype
-        if src.at[row.Index, "Response"]:
-            dest.at[row.Index, "ResponseYesNo"] = "Yes"
-            dest.at[row.Index, "EstResponseDate"] = datetime.date.today() - datetime.timedelta(1)#src.at[row.Index, "ResponseDate"]
-            # If no score, evaluate with GAIA (TODO)
-            evaluate_response(dest.iloc[row.Index])
-        else:
-            dest.at[row.Index, "ResponseYesNo"] = "No"
-
-def new_dataframe():
-    df = pandas.DataFrame() # DataFrame to be added to Staging table
-    for field in DATABASE_COLUMNS_AND_DATA_TYPES: # init columns
-        df.at[0, field[0]] = None
+def evaluate_responses(df):
+    for row in df.itertuples():
+        gaia_payload = {
+            "prompt": EVAL_PROMPT + "<|endoftext|>",#row["Response"], # Specify format together with Weichert
+                "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
+                "temperature": 0, # Higher number = more risks
+                "top_p": 0.0, # Similar to temperature
+                #"logit_bias": {},
+                #"user": "string",
+                "n": 1, # Number of responses
+                "stream": False, # Stream partial progress
+                #"logprobs": None,
+                #"suffix": "", # After input or output string
+                #"echo": False, # Echo prompt 
+                #"stop": "",    
+                #"completion_config": "string",
+                #"presence_penalty": 0,
+                #"frequency_penalty": 0,
+                #"best_of": 0
+        }
+        response = requests.request("POST", GAIA_URL, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
+        try: 
+            text = json.loads(response.text)["choices"][0]["text"].replace("\n", "")
+            text = text.replace("<|im_end|>", "")
+            scores = json.loads(text)
+            if not scores:
+                return
+            scores = json.loads(scores.group(1))
+            row.EmpathyScore = scores["EmpathyScore"]
+            row.HelpfulnessScore = scores["HelpfulnessScore"]
+            row.IndividualityScore = scores["IndividualityScore"]
+            row.ResponseTimeScore = scores["ResponseTimeScore"]
+        except:
+            print("Error processing GAIA reply while evaluating response.")
     return df
 
-def put_csv_in_sql(paths, conn, curs):
-    df = new_dataframe()
-    for path in paths:
-        try: 
-            data = pandas.read_csv(path)
-        except: 
-            print("CSV File not found, Path may be incorrect, File may be missing, or File may be using wrong encoding.")
-        src = pandas.DataFrame(data).astype(str)
-        src.columns = src.columns.str.replace(' 1', '') # clean up Screamingfrog BS
-        if(len(src.index) == 0): # Skip if empty
-            continue
-        process_scraped_data(src, df, path)
-        for row in df.itertuples():
-            sql_insert_row(SQL_STAGING_TABLE_NAME, row, curs)
-            if row.Index % 10 == 9: # Commit records every 10 rows in case of crash or something
-                conn.commit()
-        conn.commit()
-        # Commit new rows to main table (ignore dupes) and empty staging table
-        curs.execute(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME} staging WHERE staging.ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});")
-        conn.commit()
-        curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME};")
-        conn.commit
+def put_df_in_sql(df): # Needs to be ported to SQLalchemy
+    for row in df.itertuples():
+        sql_insert_row(SQL_STAGING_TABLE_NAME, row, curs)
+        if row.Index % 10 == 9: # Commit records every 10 rows in case of crash or something
+            conn.commit()
+    conn.commit()
+    # Commit new rows to main table (ignore dupes) and empty staging table
+    curs.execute(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME} staging WHERE staging.ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});")
+    conn.commit()
+    curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME};")
+    conn.commit
 
-def fetch_unanswered_reviews(curs):
-    df = new_dataframe()
+def fetch_unanswered_reviews(curs): # Needs to be ported to SQLalchemy and df
     try:
         curs.execute(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ResponseYesNo='No'")
         result = curs.fetchall()
         columns = [column[0] for column in curs.description]
-        for row in result:
-            queue.append(dict(zip(columns, row)))
     except pyodbc.Error as exception:
         print(exception)
 
-def generate_responses(reviews, errors):
-    for review in reviews:
+def generate_responses(reviews_df): # Needs to be ported to SQLalchemy
+    for review in reviews_df:
         gaia_payload = {
-            "prompt": PROMPT_PREFIX + review.get('ReviewText') + "<|endoftext|>", #review.get('Rating'), # Specify format together with Weichert
+            "prompt": PROMPT_PREFIX + "Es wird sehr stressig man wird zwar geschult aber die Realität sieht anders aus. Erster Arbeitstag wird man gleich ins Kaos geschickt. Würde es nicht empfehlen " + "<|endoftext|>", # Specify format together with Weichert
             "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
             "temperature": 0.7, # Higher number = more risks
             "top_p": 0.0, # Similar to temperature
@@ -322,60 +216,60 @@ def generate_responses(reviews, errors):
             #"frequency_penalty": 0,
             #"best_of": 0
         }
-        # TODO: SQL Datenbank "Rating" bereinigen, aktuell sind noch sehr viele numerischen Werte drin, die keinen längenren
         response = requests.request("POST", GAIA_URL, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
-        match response.status_code:
-            case 200: # Success (Handle fail codes?)
-                review['Response'] = json.loads(response.text)['choices'][0]['text']
-                review['ResponseYesNo'] = "Yes"
-            case other: # TODO Handle other HTTP Codes?
-                print("other")
-                reviews.remove(review) # Do not give to upload method
-                errors.append(review)
-    return reviews
+        if(response.status_code < 200 or response.status_code > 299):
+            print(f"Error connecting to GAIA API. HTTP Status Code: {response.status_code}")
+            continue
+        review['Response'] = json.loads(response.text)['choices'][0]['text'] # Interpret JSON Correctly
+        review['ResponseYesNo'] = "Yes"
+    return reviews_df
 
-def upload_responses(reviews, errors):
+def post_responses(df):
     # WebDriver config
     options = webdriver.ChromeOptions()
     options.add_argument(f"--user-data-dir={CHROME_USER_DATA_DIR}") #e.g. C:\Users\You\AppData\Local\Google\Chrome\User Data
     options.add_argument(r"--remote-debugging-port=9222")
     driver = webdriver.Chrome(options=options)
 
-    for review in reviews:
+    for row in df:
         try: 
-            driver.get(review.get('Link')) # Go to review page
+            driver.get(row["Link"]) # Go to review page
             timer(random.uniform(3.0, 5.0))
-            if review.get('Platform') == 'Indeed': # Indeed 
-                next_elem = driver.find_element(By.XPATH, "//button[@class='css-1vapj3m e8ju0x50']") # Comment button
-                next_elem.click() 
-                timer(random.uniform(3.0, 5.0))
-                next_elem = driver.find_element(By.XPATH, "//textarea[@id='ifl-TextAreaFormField-:r0:']") # Comment Textarea
-                next_elem.send_keys(review.get('Answer (text)'))
-                timer(random.uniform(3.0, 5.0))
-                next_elem = driver.find_element(By.XPATH, "//button[@class='css-1orlm12 e8ju0x50']") # Post button
-                next_elem.click()
-            if review.get('Platform') == 'Glassdoor': # Glassdoor 
-                next_elem = driver.find_element(By.XPATH, '//*[@id="empReview_54905531"]/div/div[3]/a/button') # Comment button
-            if review.get('Platform') == 'Kununu': # Kununu 
-                next_elem = driver.find_element(By.XPATH, "//*[@id='__next']/div/div[1]/main/div/div[4]/div/article[1]/div/div/div[17]/a") # Comment button
-                next_elem.click() 
-                timer(random.uniform(3.0, 5.0)) # Wait for page to reload
-                next_elem = driver.find_element(By.XPATH, "//*[@id='new-response']/form/textarea") # Comment Textarea
-                next_elem.send_keys(review.get('Answer (text)'))
-                timer(random.uniform(3.0, 5.0))
-                next_elem = driver.find_element(By.XPATH, "//*[@id='new-response']/form/div/button[1]") # Post button
-                next_elem.click()
-            else: # 
-                reviews.remove(review)
-                errors.append(review)
+            match row["Platform"].lower():
+                case "indeed":
+                    next_elem = driver.find_element(By.XPATH, "//button[@class='css-1vapj3m e8ju0x50']") # Comment button
+                    next_elem.click() 
+                    timer(random.uniform(3.0, 5.0))
+                    next_elem = driver.find_element(By.XPATH, "//textarea[@id='ifl-TextAreaFormField-:r0:']") # Comment Textarea
+                    next_elem.send_keys(row["Response"])
+                    row["ResponseYesNo"] = "Yes"
+                    timer(random.uniform(3.0, 5.0))
+                    next_elem = driver.find_element(By.XPATH, "//button[@class='css-1orlm12 e8ju0x50']") # Post button
+                    next_elem.click()
+                    continue
+                case "glassdoor":
+                    next_elem = driver.find_element(By.XPATH, '//*[@id="empReview_54905531"]/div/div[3]/a/button') # Comment button
+                    continue
+                case "kununu":
+                    next_elem = driver.find_element(By.XPATH, "//*[@id='__next']/div/div[1]/main/div/div[4]/div/article[1]/div/div/div[17]/a") # Comment button
+                    next_elem.click() 
+                    timer(random.uniform(3.0, 5.0)) # Wait for page to reload
+                    next_elem = driver.find_element(By.XPATH, "//*[@id='new-response']/form/textarea") # Comment Textarea
+                    next_elem.send_keys(row["Response"])
+                    row["ResponseYesNo"] = "Yes"
+                    timer(random.uniform(3.0, 5.0))
+                    next_elem = driver.find_element(By.XPATH, "//*[@id='new-response']/form/div/button[1]") # Post button
+                    next_elem.click()
+                    continue
+                case other:
+                    continue
             # TODO: Check if successful. If yes, update SQL entry, if no, ??? (Don't requeue?)
         except (se.NoSuchElementException, se.ElementNotInteractableException) as exception:
             if(exception == se.NoSuchElementException):
                 driver.close()
-                upload_responses() # Try again???? TODO: Is this right???
                 return
 
-def update_sql_entries(reviews):
+def update_sql_entries(reviews): # Needs to be ported to df and sqlalchemy
     try:
         # Call by ref or val?
         connection = pyodbc.connect(f"Driver={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database=master;Trusted_Connection=True;")
@@ -387,15 +281,15 @@ def update_sql_entries(reviews):
     except pyodbc.Error as exception:
         print(exception)
 
-def wex_string_to_datetime(str):
+def wex_string_to_datetime(str): # new 
     return datetime.datetime.strptime(str, "%Y-%m-%dT%H:%M:%S")
 
-def extract_new_reviews(portal, since):
+def extract_new_reviews(portal, since): # new version
     list_of_dicts = []
     match portal.lower():
         case "indeed":
             pagenum = 0
-            while(pagenum < MAX_PAGES):
+            while(pagenum < MAX_WEX_CALLS):
                 response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/indeed?id=DHL&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 20}")
                 if(response.status_code < 200 or response.status_code > 299):
                     print(f"Error connecting to Wexrtactor. Status code: {response.status_code}")
@@ -444,7 +338,7 @@ def extract_new_reviews(portal, since):
             languages = ["de", "en", "nl", "it", "es", "fr", "pt"] # ISO 639
             for lang in languages:
                 pagenum = 0
-                while(pagenum < MAX_PAGES): 
+                while(pagenum < MAX_WEX_CALLS): 
                     response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/glassdoor?id=650250&language={lang}&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 10}")
                     responsetext = response.text.replace("\n", " ")
                     responsetext = responsetext.replace("\r", "")
@@ -484,19 +378,34 @@ def extract_new_reviews(portal, since):
                     pagenum += 1 # Go to next page if all reviews on current page are new
             df = pandas.DataFrame(list_of_dicts)
             return df
+        case "kununu":
+            pagenum = 0
+            while(pagenum < MAX_WEX_CALLS):
+                response = ""
+                responsetext = response.text.replace("\n", " ")
+                responsetext = responsetext.replace("\r", "")
+
         # TODO: Add kununu
         case other:
             print(f"Error extracting reviews from Wextractor, \"{portal}\" is not a supported portal.")
             return
 
-# Main (TODO)
+# Main
 
-new_reviews_df = extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(7))
+    # Steps: 
+    #   1. Get new reviews from Wextractor
+    #   2. Put these reviews into the SQL Database (staging, then main) (does SQLalchemy eliminate the need for staging?)
+    #   3. Pull unanswered reviews from SQL Database (most likely only recent ones)
+    #   4. Feed these in GAIA one by one
+
+
 conn = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
 curs = conn.cursor()
-#put_csv_in_sql(SCREAMINGFROG_CSV_PATH, conn, curs)
-df = fetch_unanswered_reviews(curs)
-if(len(queue) != 0):
-    generate_responses(queue, error_queue) # Feed reviews into GAIA to obtain response (EVALUATE RESPONSE)
-    upload_responses(queue, error_queue) # Upload GAIA's responses
-    update_sql_entries() # Update SQL Database with responses
+
+new_reviews_df = extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(7))
+put_df_in_sql(new_reviews_df)
+unanswered_reviews_df = fetch_unanswered_reviews(curs)
+#generate_responses(unanswered_reviews_df)
+evaluate_responses(unanswered_reviews_df)
+#post_responses(unanswered_reviews_df)
+
