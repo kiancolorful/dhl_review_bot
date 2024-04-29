@@ -378,13 +378,6 @@ def extract_new_reviews(portal, since): # new version
                     pagenum += 1 # Go to next page if all reviews on current page are new
             df = pandas.DataFrame(list_of_dicts)
             return df
-        case "kununu":
-            pagenum = 0
-            while(pagenum < MAX_WEX_CALLS):
-                response = ""
-                responsetext = response.text.replace("\n", " ")
-                responsetext = responsetext.replace("\r", "")
-
         # TODO: Add kununu
         case other:
             print(f"Error extracting reviews from Wextractor, \"{portal}\" is not a supported portal.")
