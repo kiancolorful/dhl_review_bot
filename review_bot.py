@@ -398,14 +398,29 @@ def extract_new_reviews(portal, since): # new version
     #   3. Pull unanswered reviews from SQL Database (most likely only recent ones)
     #   4. Feed these in GAIA one by one
 
+try:
+    conn = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
+    curs = conn.cursor()
 
-conn = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
-curs = conn.cursor()
+    new_reviews_indeed = extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(1))
+    put_df_in_sql(new_reviews_indeed)
+    new_reviews_glassdoor = extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(1))
+    put_df_in_sql(new_reviews_glassdoor)
+except Exception as Argument:
+     # creating/opening a file
+    f = open("logs.txt", "a")
+ 
+    # writing in the file
+    f.write(str(Argument))
+     
+    # closing the file
+    f.close() 
 
-new_reviews_df = extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(7))
-put_df_in_sql(new_reviews_df)
-unanswered_reviews_df = fetch_unanswered_reviews(curs)
+
+
+
+#unanswered_reviews_df = fetch_unanswered_reviews(curs)
 #generate_responses(unanswered_reviews_df)
-evaluate_responses(unanswered_reviews_df)
+#evaluate_responses(unanswered_reviews_df)
 #post_responses(unanswered_reviews_df)
 
