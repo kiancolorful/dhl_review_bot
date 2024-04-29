@@ -13,7 +13,7 @@ import dateparser
 
 # Constants
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
-SQL_SERVER_NAME = r"85.215.196.5"
+SQL_SERVER_NAME = r"WIN-CIH1M1J41BG"
 DATABASE = 'master'
 SQL_TABLE_NAME = 'DHL_SCHEMA'#'CC_DATA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
@@ -102,7 +102,7 @@ def timer(secs):
 def sql_insert_row(table_name, row, curs): 
     insert_string = f"INSERT INTO {table_name} ("
     for column in DATABASE_COLUMNS_AND_DATA_TYPES:
-        insert_string += column[0] + ", "
+        insert_string += column + ", "
     insert_string = insert_string[:-2]
     insert_string += ") VALUES ("
     for column in DATABASE_COLUMNS_AND_DATA_TYPES:
@@ -186,7 +186,7 @@ def put_df_in_sql(df): # Needs to be ported to SQLalchemy
     curs.execute(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME} staging WHERE staging.ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});")
     conn.commit()
     curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME};")
-    conn.commit
+    conn.commit()
 
 def fetch_unanswered_reviews(curs): # Needs to be ported to SQLalchemy and df
     try:
@@ -382,6 +382,7 @@ def extract_new_reviews(portal, since): # new version
         case other:
             print(f"Error extracting reviews from Wextractor, \"{portal}\" is not a supported portal.")
             return
+    return pandas.DataFrame(list_of_dicts)
 
 # Main
 
@@ -392,13 +393,18 @@ def extract_new_reviews(portal, since): # new version
     #   4. Feed these in GAIA one by one
 
 try:
+    print("start")
     conn = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
     curs = conn.cursor()
-
-    new_reviews_indeed = extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(1))
+    print("connected to db")
+    new_reviews_indeed = extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
+    print("scraped indeed")
     put_df_in_sql(new_reviews_indeed)
-    new_reviews_glassdoor = extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(1))
+    print("indeed into db")
+    new_reviews_glassdoor = extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
+    print("scraped glassdoor")    
     put_df_in_sql(new_reviews_glassdoor)
+    print("glassdoor into db")
 except Exception as Argument:
      # creating/opening a file
     f = open("logs.txt", "a")
