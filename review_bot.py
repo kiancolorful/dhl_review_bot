@@ -9,11 +9,11 @@ import random
 import json
 import re
 import datetime
-import dateparser
+import sqlalchemy
 
 # Constants
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
-SQL_SERVER_NAME = r"WIN-CIH1M1J41BG"
+SQL_SERVER_NAME = r"85.215.196.5"
 DATABASE = 'master'
 SQL_TABLE_NAME = 'DHL_SCHEMA'#'CC_DATA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
@@ -99,7 +99,7 @@ def timer(secs):
             time.sleep(secs)
             return
 
-def sql_insert_row(table_name, row, curs): 
+def sql_insert_row(table_name, row, curs): # Needs to be ported to SQLalchemy/Pandas
     insert_string = f"INSERT INTO {table_name} ("
     for column in DATABASE_COLUMNS_AND_DATA_TYPES:
         insert_string += column + ", "
@@ -109,7 +109,7 @@ def sql_insert_row(table_name, row, curs):
         insert_string += "?,"
     insert_string = insert_string[:-1]
     insert_string += ");"
-    curs.execute(insert_string, # Wär cool, wenn wir hier einfach "row" übergeben könnten, doch dann wird index mitgegeben
+    curs.execute(insert_string, 
                 row.Portal, 
                 row.ID, 
                 row.Link, 
@@ -188,11 +188,13 @@ def put_df_in_sql(df): # Needs to be ported to SQLalchemy
     curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME};")
     conn.commit()
 
-def fetch_unanswered_reviews(curs): # Needs to be ported to SQLalchemy and df
+def fetch_unanswered_reviews(engine, since = False): 
     try:
-        curs.execute(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ResponseYesNo='No'")
-        result = curs.fetchall()
-        columns = [column[0] for column in curs.description]
+        if since:
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ResponseYesNo='No' AND ReviewDate >= {since.strftime('%Y-%m-%d')}", engine)
+        else:
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ResponseYesNo='No'", engine)
+        return df
     except pyodbc.Error as exception:
         print(exception)
 
@@ -393,6 +395,11 @@ def extract_new_reviews(portal, since): # new version
     #   4. Feed these in GAIA one by one
 
 try:
+    engine = sqlalchemy.create_engine(f"mssql+pyodbc://{USER}:{PW}@{SQL_SERVER_NAME}/{DATABASE}?driver={MSSQL_DRIVER}")
+    conn = engine.connect()
+    df = pandas.read_sql_table("DHL_SCHEMA", engine)
+
+    print(df)
     print("start")
     conn = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
     curs = conn.cursor()
