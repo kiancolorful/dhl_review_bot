@@ -1,0 +1,5 @@
+tuple indices must be integers or slices, not str(pyodbc.ProgrammingError) ('42S22', "[42S22] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Invalid column name 'Glassdoor'. (207) (SQLExecDirectW)")
+[SQL: SELECT * FROM DHL_SCHEMA WHERE Portal=Glassdoor]
+(Background on this error at: https://sqlalche.me/e/20/f405)(pyodbc.ProgrammingError) ('42S22', "[42S22] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Invalid column name 'Glassdoor'. (207) (SQLExecDirectW)")
+[SQL: SELECT * FROM DHL_SCHEMA WHERE Portal=Glassdoor]
+(Background on this error at: https://sqlalche.me/e/20/f405)'NoneType' object has no attribute 'find'
