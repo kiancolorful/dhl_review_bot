@@ -10,6 +10,7 @@ import json
 import re
 import datetime
 import sqlalchemy
+import bs4
 
 # Constants
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
@@ -54,6 +55,8 @@ CHROME_USER_DATA_DIR = r"C:\Users\KianGosling\AppData\Local\Google\Chrome\User D
 SCREAMINGFROG_CSV_PATH = [r"C:\Users\KianGosling\Music\Kununu\benutzerdefinierte_extraktion_alle.csv", r"C:\Users\KianGosling\Music\Indeed\benutzerdefinierte_extraktion_alle.csv", r"C:\Users\KianGosling\Music\Glassdoor\benutzerdefinierte_extraktion_alle.csv"]
 WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
 MAX_WEX_CALLS = 1
+
+SCRAPINGDOG_API_KEY = "6619300786d2b244207115b9"
 
 GAIA_DEPLOYMENT_ID = "gpt-35-turbo-0301"
 API_VERSION = "2023-05-15"
@@ -265,7 +268,7 @@ def post_responses(df):
                     continue
                 case other:
                     continue
-            # TODO: Check if successful. If yes, update SQL entry, if no, ??? (Don't requeue?)
+            # TODO: Check if successful
         except (se.NoSuchElementException, se.ElementNotInteractableException) as exception:
             if(exception == se.NoSuchElementException):
                 driver.close()
@@ -282,6 +285,32 @@ def update_sql_entries(reviews): # Needs to be ported to df and sqlalchemy
             reviews.remove(review)
     except pyodbc.Error as exception:
         print(exception)
+
+def check_if_responses_exist(df): # Checks if reviews have responses already and updates dataframe
+    for row in df.itertuples():
+        response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY}&url={row.Link}&dynamic=false")
+        if(response.status_code < 200 or response.status_code > 299): # Bad request
+            continue
+        soup = bs4.BeautifulSoup(response.text, "html.parser")
+        match row.Portal.lower():
+            case "indeed":
+                rev = soup.find(class_="css-14nhnfd e37uo190")
+                resp = rev.find(class_="css-j3kgaw e1wnkr790")
+                if resp:
+                    df.at[row.Index, "ResponseYesNo"] = "Yes"
+                    df.at[row.Index, "Response"] = resp.text
+                else:
+                    df.at[row.Index, "ResponseYesNo"] = "No"
+            case "glassdoor":
+                rev = soup.find(class_="review-details_reviewDetails__4N3am")
+                resp = rev.find(class_="review-details_isCollapsed__5mhq_ newEmployerResponseText px-std")
+                if resp:
+                    df.at[row.Index, "ResponseYesNo"] = "Yes"
+                    df.at[row.Index, "Response"] = resp.text
+                else:
+                    df.at[row.Index, "ResponseYesNo"] = "No"
+    return df # Return anyway
+
 
 def wex_string_to_datetime(str): # new 
     return datetime.datetime.strptime(str, "%Y-%m-%dT%H:%M:%S")
@@ -397,7 +426,12 @@ def extract_new_reviews(portal, since): # new version
 try:
     engine = sqlalchemy.create_engine(f"mssql+pyodbc://{USER}:{PW}@{SQL_SERVER_NAME}/{DATABASE}?driver={MSSQL_DRIVER}")
     conn = engine.connect()
-    df = pandas.read_sql_table("DHL_SCHEMA", engine)
+    df = pandas.read_sql("SELECT * FROM DHL_SCHEMA WHERE Portal='Glassdoor'", engine)
+    check_if_responses_exist(df)
+
+
+
+
 
     print(df)
     print("start")
