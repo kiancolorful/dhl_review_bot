@@ -20,19 +20,19 @@ SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
 USER = 'kian'
 PW = 'Gosling1'
 DATABASE_COLUMNS_AND_DATA_TYPES = {
-    "Portal": "nvarchar(10)", # Derived from SCREAMINGFROG_CSV_PATH
-    "ID": "nvarchar(50)", # Derived from relative link
-    "Link": "nvarchar(255)", # Derived from relative link and domain
-    "ReviewTitle": "nvarchar(255)", # Scraped
-    "ReviewDate": "date", # Scraped (bad format, can I please just use system clock, we will be scraping at least once a day)
-    "OverallSatisfaction": "float", # Scraped (Change comma to period)
-    "JobTitle": "nvarchar(50)", # Scraped, cleanup necessary
-    "Department": "nvarchar(50)", # Scraped, bad format TODO: nur bei kununu?
-    "CurrentFormerEmployee": "nvarchar(10)", # Scraped
-    "ContractTerminationKununuOnly": "int", # ????? 
-    "Location": "nvarchar(50)", # Scraped (bad format with Glassdoor, State Included)
-    "StateRegion": "nvarchar(50)", # PowerBI takes care of it, leave blank
-    "Country": "nvarchar(50)", # PowerBI takes care of it, leave blank
+    "Portal": "nvarchar(10)", 
+    "ID": "nvarchar(50)", 
+    "Link": "nvarchar(255)", 
+    "ReviewTitle": "nvarchar(255)", 
+    "ReviewDate": "date", 
+    "OverallSatisfaction": "float", 
+    "JobTitle": "nvarchar(50)",
+    "Department": "nvarchar(50)", 
+    "CurrentFormerEmployee": "nvarchar(10)", 
+    "ContractTerminationKununuOnly": "int", 
+    "Location": "nvarchar(50)", 
+    "StateRegion": "nvarchar(50)", 
+    "Country": "nvarchar(50)", 
     "ReviewText": "nvarchar(MAX)", 
     "MainpositiveAspect": "nvarchar(255)", 
     "MainAreaofImprovement": "nvarchar(255)", 
@@ -283,6 +283,41 @@ def check_if_responses_exist(df : pandas.DataFrame): # Checks if reviews have re
 def wex_string_to_datetime(str): # new 
     return datetime.datetime.strptime(str, "%Y-%m-%dT%H:%M:%S")
 
+def supplement_kununu_data(row): # Supplements Department, Position, Former/Current
+    url = row["Link"]
+    response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY}&url={url}&dynamic=false")
+    if(response.status_code < 200 or response.status_code > 299): # Bad request
+        print(f"Error connecting to Kununu through Scrapingdog. Status code: {response.status_code}")
+        return
+    soup = bs4.BeautifulSoup(response.text, "html.parser")
+    try:
+        div = soup.find(class_="index__employmentInfoBlock__wuOtj p-tiny-regular")
+        position = div.find("b").text
+        department = div.find("span").text
+        row["JobTitle"] = position
+        if "Ex-" in position:
+            row["CurrentFormerEmployee"] = "Former"
+        else: 
+            row["CurrentFormerEmployee"] = "Current"
+        if "im Bereich" in department:
+            right = department.split("im Bereich ")[1]
+            center = right.split(" bei")[0]
+            row["Department"] = center
+    except: 
+        print("Error parsing Kununu! Maybe they changed their HTML, or there are too many concurrent requests. Code: " + str(response.status_code))
+
+def append_kununu_scores(review):
+    scores = "\n"
+    for key in review:
+        if "_rating" in key:
+            scores += "\n" + key.replace("_", " ") + ": " + str(review[key]["rating"]) + "/5 "
+            if (review[key]["text"] != "" and review[key]["text"] != None):
+                scores += review[key]["text"]
+    print(scores)
+    return scores
+
+
+
 def extract_new_reviews(portal : str, since : datetime): # new version
     list_of_dicts = []
     match portal.lower():
@@ -291,7 +326,7 @@ def extract_new_reviews(portal : str, since : datetime): # new version
             while(pagenum < MAX_WEX_CALLS):
                 response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/indeed?id=DHL&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 20}")
                 if(response.status_code < 200 or response.status_code > 299):
-                    print(f"Error connecting to Wexrtactor. Status code: {response.status_code}")
+                    print(f"Error connecting to Wextractor. Status code: {response.status_code}")
                     return
                 responsetext = response.text.replace("\n", " ")
                 responsetext = responsetext.replace("\r", "")
@@ -320,9 +355,11 @@ def extract_new_reviews(portal : str, since : datetime): # new version
                     row["Location"] = review["location"]
                     row["StateRegion"] = None
                     row["Country"] = None
-                    row["ReviewText1"] = review["pros"]
-                    row["ReviewText2"] = review["cons"]
-                    row["ReviewText"] = review["text"] # TODO: Do we have to remove newlines?
+                    row["ReviewText"] = review["text"] 
+                    if review["cons"]:
+                        row["ReviewText"] = "Cons: " + review["cons"] + "\n\n" + row["ReviewText"]
+                    if review["pros"]:
+                        row["ReviewText"] = "Pros: " + review["pros"] + "\n\n" + row["ReviewText"]
                     row["MainpositiveAspect"] = None # ?????
                     row["MainAreaofImprovement"] = None # ?????
                     row["SensitiveTopic"] = None # To be checked later
@@ -364,9 +401,12 @@ def extract_new_reviews(portal : str, since : datetime): # new version
                         row["Location"] = review["location"]
                         row["StateRegion"] = None
                         row["Country"] = None
-                        row["ReviewText1"] = review["pros"]
-                        row["ReviewText2"] = review["cons"]
-                        row["ReviewText"] = None # TODO: Check this
+                        if review["pros"]:
+                            row["ReviewText"] = "Pros: " + review["pros"] 
+                        if review["pros"] and review["cons"]:
+                            row["ReviewText"] = row["ReviewText"] + "\n\n"
+                        if review["cons"]:
+                            row["ReviewText"] = row["ReviewText"] + "Cons: " + review["cons"]
                         row["MainpositiveAspect"] = None # ?????
                         row["MainAreaofImprovement"] = None # ?????
                         row["SensitiveTopic"] = None # To be checked later
@@ -378,6 +418,43 @@ def extract_new_reviews(portal : str, since : datetime): # new version
             df = pandas.DataFrame(list_of_dicts)
             return df
         # TODO: Add kununu
+        case "kununu":
+            pagenum = 0 
+            while(pagenum < MAX_WEX_CALLS):
+                response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/kununu?auth_token={WEXTRACTOR_AUTH_TOKEN}&id=https://www.kununu.com/de/deutsche-post&offset={pagenum * 10}")
+                if(response.status_code < 200 or response.status_code > 299):
+                    print(f"Error connecting to Wexrtactor. Status code: {response.status_code}")
+                    return
+                responsetext = response.text.replace("\n", " ")
+                responsetext = responsetext.replace("\r", "")
+                time.sleep(1) # Avoid rate limiting
+                json_data = json.loads(responsetext)
+
+                for review in json_data["reviews"]:
+                    if(wex_string_to_datetime(review["datetime"]) < since): # Review is old, return dataframe as-is
+                        df = pandas.DataFrame(list_of_dicts)
+                        return df
+                    row = dict.fromkeys(DATABASE_COLUMNS_AND_DATA_TYPES)
+                    row["Portal"] = "kununu"
+                    row["ID"] = review["id"]
+                    row["Link"] = review["url"]
+                    row["ReviewTitle"] = review["title"]
+                    row["ReviewDate"] = wex_string_to_datetime(review["datetime"].split('.', 1)[0]) 
+                    row["OverallSatisfaction"] = float(review["rating"])
+                    row["Department"] = None
+                    row["ContractTerminationKununuOnly"] = None
+                    row["StateRegion"] = None
+                    row["Country"] = None
+                    row["ReviewText"] = review["text"] + append_kununu_scores(review)
+                    row["MainpositiveAspect"] = None # ?????
+                    row["MainAreaofImprovement"] = None # ?????
+                    row["SensitiveTopic"] = None # To be checked later
+                    row["ResponseYesNo"] = None
+                    row["Response"] = None
+                    row["EstResponseDate"] = None
+                    supplement_kununu_data(row)
+                    list_of_dicts.append(row)
+                pagenum += 1
         case other:
             print(f"Error extracting reviews from Wextractor, \"{portal}\" is not a supported portal.")
             return
