@@ -34,8 +34,6 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "Location": "nvarchar(50)", 
     "StateRegion": "nvarchar(50)", 
     "Country": "nvarchar(50)", 
-    "ReviewText1": "nvarchar(MAX)", 
-    "ReviewText2": "nvarchar(MAX)", 
     "ReviewText": "nvarchar(MAX)", 
     "MainpositiveAspect": "nvarchar(255)", 
     "MainAreaofImprovement": "nvarchar(255)", 
@@ -375,9 +373,11 @@ def extract_new_reviews(portal, since): # new version
                     row["Location"] = review["location"]
                     row["StateRegion"] = None
                     row["Country"] = None
-                    row["ReviewText1"] = review["pros"]
-                    row["ReviewText2"] = review["cons"]
-                    row["ReviewText"] = review["text"] # TODO: Do we have to remove newlines?
+                    row["ReviewText"] = review["text"] 
+                    if review["cons"]:
+                        row["ReviewText"] = "Cons: " + review["cons"] + "\n\n" + row["ReviewText"]
+                    if review["pros"]:
+                        row["ReviewText"] = "Pros: " + review["pros"] + "\n\n" + row["ReviewText"]
                     row["MainpositiveAspect"] = None # ?????
                     row["MainAreaofImprovement"] = None # ?????
                     row["SensitiveTopic"] = None # To be checked later
@@ -419,9 +419,12 @@ def extract_new_reviews(portal, since): # new version
                         row["Location"] = review["location"]
                         row["StateRegion"] = None
                         row["Country"] = None
-                        row["ReviewText1"] = review["pros"]
-                        row["ReviewText2"] = review["cons"]
-                        row["ReviewText"] = None # TODO: Check this
+                        if review["pros"]:
+                            row["ReviewText"] = "Pros: " + review["pros"] 
+                        if review["pros"] and review["cons"]:
+                            row["ReviewText"] = row["ReviewText"] + "\n\n"
+                        if review["cons"]:
+                            row["ReviewText"] = row["ReviewText"] + "Cons: " + review["cons"]
                         row["MainpositiveAspect"] = None # ?????
                         row["MainAreaofImprovement"] = None # ?????
                         row["SensitiveTopic"] = None # To be checked later
@@ -460,7 +463,7 @@ def extract_new_reviews(portal, since): # new version
                     row["ContractTerminationKununuOnly"] = None
                     row["StateRegion"] = None
                     row["Country"] = None
-                    row["ReviewText"] = review["text"] # TODO: Do we have to remove newlines?
+                    row["ReviewText"] = review["text"] 
                     row["MainpositiveAspect"] = None # ?????
                     row["MainAreaofImprovement"] = None # ?????
                     row["SensitiveTopic"] = None # To be checked later
@@ -488,7 +491,7 @@ def extract_new_reviews(portal, since): # new version
 try:
 
     # TEST STUFF
-    df = extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(4))
+    df = extract_new_reviews("glassdoor", datetime.datetime.now() - datetime.timedelta(4))
     time.sleep(10)
 
     engine = sqlalchemy.create_engine(f"mssql+pyodbc://{USER}:{PW}@{SQL_SERVER_NAME}/{DATABASE}?driver={MSSQL_DRIVER}")
