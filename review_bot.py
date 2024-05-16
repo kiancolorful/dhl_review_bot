@@ -13,7 +13,7 @@ import bs4
 
 # Constants
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
-SQL_SERVER_NAME = r"85.215.196.5"
+SQL_SERVER_NAME = r"WIN-CIH1M1J41BG"
 DATABASE = 'master'
 SQL_TABLE_NAME = 'DHL_SCHEMA'#'CC_DATA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
