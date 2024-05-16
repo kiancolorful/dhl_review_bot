@@ -334,7 +334,7 @@ def supplement_kununu_data(row): # Supplements Department, Position, Former/Curr
             center = right.split(" bei")[0]
             row["Department"] = center
     except: 
-        print("Error parsing Kununu! They may have changed their HTML.")
+        print("Error parsing Kununu! Maybe they changed their HTML, or there are too many concurrent requests. Code: " + str(response.status_code))
 
 def append_kununu_scores(review):
     scores = "\n"
