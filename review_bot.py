@@ -33,8 +33,6 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "Location": "nvarchar(50)", # Scraped (bad format with Glassdoor, State Included)
     "StateRegion": "nvarchar(50)", # PowerBI takes care of it, leave blank
     "Country": "nvarchar(50)", # PowerBI takes care of it, leave blank
-    "ReviewText1": "nvarchar(MAX)", # Scraped 
-    "ReviewText2": "nvarchar(MAX)", 
     "ReviewText": "nvarchar(MAX)", 
     "MainpositiveAspect": "nvarchar(255)", 
     "MainAreaofImprovement": "nvarchar(255)", 
@@ -400,22 +398,6 @@ try:
     if not con:
         print("problem connecting to DB, exiting...")
     print("connected to db")
-
-    glassdoor_revs = pandas.read_sql("SELECT * FROM DHL_SCHEMA WHERE Portal='Indeed' AND (ReviewText1!='') AND (ReviewText2!='')", engine)
-    print(glassdoor_revs)
-    for row in glassdoor_revs.iterrows():
-        glassdoor_revs.at[row[0], "ReviewText"] = "Pros: " + glassdoor_revs.at[row[0], "ReviewText1"] + "\n\nCons: " + glassdoor_revs.at[row[0], "ReviewText2"]
-
-    put_df_in_sql(glassdoor_revs, con, False, True)
-
-
-
-
-
-
-
-
-
 
     new_reviews_indeed = extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
     print("scraped indeed")
