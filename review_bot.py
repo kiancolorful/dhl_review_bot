@@ -336,6 +336,16 @@ def supplement_kununu_data(row): # Supplements Department, Position, Former/Curr
     except: 
         print("Error parsing Kununu! They may have changed their HTML.")
 
+def append_kununu_scores(review):
+    scores = "\n"
+    for key in review:
+        if "_rating" in key:
+            scores += "\n" + key.replace("_", " ") + ": " + str(review[key]["rating"]) + "/5 "
+            if (review[key]["text"] != "" and review[key]["text"] != None):
+                scores += review[key]["text"]
+    print(scores)
+    return scores
+
 def extract_new_reviews(portal, since): # new version
     list_of_dicts = []
     match portal.lower():
@@ -463,7 +473,7 @@ def extract_new_reviews(portal, since): # new version
                     row["ContractTerminationKununuOnly"] = None
                     row["StateRegion"] = None
                     row["Country"] = None
-                    row["ReviewText"] = review["text"] 
+                    row["ReviewText"] = review["text"] + append_kununu_scores(review)
                     row["MainpositiveAspect"] = None # ?????
                     row["MainAreaofImprovement"] = None # ?????
                     row["SensitiveTopic"] = None # To be checked later
@@ -491,7 +501,7 @@ def extract_new_reviews(portal, since): # new version
 try:
 
     # TEST STUFF
-    df = extract_new_reviews("glassdoor", datetime.datetime.now() - datetime.timedelta(4))
+    df = extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(4))
     time.sleep(10)
 
     engine = sqlalchemy.create_engine(f"mssql+pyodbc://{USER}:{PW}@{SQL_SERVER_NAME}/{DATABASE}?driver={MSSQL_DRIVER}")
