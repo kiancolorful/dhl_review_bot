@@ -7,7 +7,6 @@ import pandas
 import requests
 import random
 import json
-import re
 import datetime
 import sqlalchemy
 import bs4
@@ -102,48 +101,15 @@ def timer(secs):
             time.sleep(secs)
             return
 
-def sql_insert_row(table_name, row, curs): # Needs to be ported to SQLalchemy/Pandas
-    insert_string = f"INSERT INTO {table_name} ("
-    for column in DATABASE_COLUMNS_AND_DATA_TYPES:
-        insert_string += column + ", "
-    insert_string = insert_string[:-2]
-    insert_string += ") VALUES ("
-    for column in DATABASE_COLUMNS_AND_DATA_TYPES:
-        insert_string += "?,"
-    insert_string = insert_string[:-1]
-    insert_string += ");"
-    curs.execute(insert_string, 
-                row.Portal, 
-                row.ID, 
-                row.Link, 
-                row.ReviewTitle, 
-                row.ReviewDate, 
-                row.OverallSatisfaction, 
-                row.JobTitle, 
-                row.Department, 
-                row.CurrentFormerEmployee, ##
-                row.ContractTerminationKununuOnly, ##
-                row.Location, 
-                row.StateRegion, ##
-                row.Country, 
-                row.ReviewText1, 
-                row.ReviewText2,
-                row.ReviewText, 
-                row.MainpositiveAspect, 
-                row.MainAreaofImprovement, 
-                row.SensitiveTopic, 
-                row.ResponseYesNo, ##
-                row.Response, 
-                row.EstResponseDate, ###
-                row.EmpathyScore, 
-                row.HelpfulnessScore, 
-                row.IndividualityScore, 
-                row.ResponseTimeScore, 
-                row.OverallScore, 
-                row.WeightedScore, 
-                )
+def sql_insert_row(table_name, row): 
+    try:
+        row_dict = row.to_dict()
+        df = pandas.DataFrame([row_dict])
+        df.to_sql(name=table_name, con=engine, if_exists='append', index=False)
+    except Exception as e:
+        print(f"Error inserting row into SQL table: {e}")
 
-def evaluate_responses(df):
+def evaluate_responses(df : pandas.DataFrame):
     for row in df.itertuples():
         gaia_payload = {
             "prompt": EVAL_PROMPT + "<|endoftext|>",#row["Response"], # Specify format together with Weichert
@@ -179,17 +145,13 @@ def evaluate_responses(df):
             print("Error processing GAIA reply while evaluating response.")
     return df
 
-def put_df_in_sql(df): # Needs to be ported to SQLalchemy
-    for row in df.itertuples():
-        sql_insert_row(SQL_STAGING_TABLE_NAME, row, curs)
-        if row.Index % 10 == 9: # Commit records every 10 rows in case of crash or something
-            conn.commit()
-    conn.commit()
-    # Commit new rows to main table (ignore dupes) and empty staging table
-    curs.execute(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME} staging WHERE staging.ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});")
-    conn.commit()
-    curs.execute(f"DELETE FROM {SQL_STAGING_TABLE_NAME};")
-    conn.commit()
+def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection): 
+    # Write the DataFrame to the SQL table
+    df.to_sql(SQL_STAGING_TABLE_NAME, con=engine, if_exists='append', index=False) # Commits automatically 
+    # Merge new rows to main table (ignore dupes) and empty staging table
+    con.execute(sqlalchemy.text(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME} staging WHERE staging.ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});"))
+    con.execute(sqlalchemy.text(f"DELETE FROM {SQL_STAGING_TABLE_NAME};"))
+    con.commit()
 
 def fetch_unanswered_reviews(engine, since = False): 
     try:
@@ -201,7 +163,7 @@ def fetch_unanswered_reviews(engine, since = False):
     except pyodbc.Error as exception:
         print(exception)
 
-def generate_responses(reviews_df): # Needs to be ported to SQLalchemy
+def generate_responses(reviews_df : pandas.DataFrame): # Needs to be ported to SQLalchemy
     for review in reviews_df:
         gaia_payload = {
             "prompt": PROMPT_PREFIX + "Es wird sehr stressig man wird zwar geschult aber die Realität sieht anders aus. Erster Arbeitstag wird man gleich ins Kaos geschickt. Würde es nicht empfehlen " + "<|endoftext|>", # Specify format together with Weichert
@@ -229,7 +191,7 @@ def generate_responses(reviews_df): # Needs to be ported to SQLalchemy
         review['ResponseYesNo'] = "Yes"
     return reviews_df
 
-def post_responses(df):
+def post_responses(df : pandas.DataFrame):
     # WebDriver config
     options = webdriver.ChromeOptions()
     options.add_argument(f"--user-data-dir={CHROME_USER_DATA_DIR}") #e.g. C:\Users\You\AppData\Local\Google\Chrome\User Data
@@ -274,19 +236,15 @@ def post_responses(df):
                 driver.close()
                 return
 
-def update_sql_entries(reviews): # Needs to be ported to df and sqlalchemy
+def update_sql_entries(reviews : pandas.DataFrame, con: sqlalchemy.Connection): 
     try:
-        # Call by ref or val?
-        connection = pyodbc.connect(f"Driver={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database=master;Trusted_Connection=True;")
-        cursor = connection.cursor()
-        for review in reviews:
-            # TODO:
-            cursor.execute(f"UPDATE progress SET CockpitDrill = {review.get('Answer (text)')} WHERE [Dialogue ID]={review.get('Dialogue ID')}")
-            reviews.remove(review)
-    except pyodbc.Error as exception:
-        print(exception)
+        for review in reviews.iterrows():
+            con.execute(f"UPDATE progress SET CockpitDrill = '{review['Answer (text)']}' WHERE [Dialogue ID] = {review['Dialogue ID']}")
+        con.commit()
+    except Exception as e:
+        print(e)
 
-def check_if_responses_exist(df): # Checks if reviews have responses already and updates dataframe
+def check_if_responses_exist(df : pandas.DataFrame): # Checks if reviews have responses already and updates dataframe
     for row in df.itertuples():
         response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY}&url={row.Link}&dynamic=false")
         if(response.status_code < 200 or response.status_code > 299): # Bad request
@@ -315,7 +273,7 @@ def check_if_responses_exist(df): # Checks if reviews have responses already and
 def wex_string_to_datetime(str): # new 
     return datetime.datetime.strptime(str, "%Y-%m-%dT%H:%M:%S")
 
-def extract_new_reviews(portal, since): # new version
+def extract_new_reviews(portal : str, since : datetime): # new version
     list_of_dicts = []
     match portal.lower():
         case "indeed":
@@ -424,43 +382,27 @@ def extract_new_reviews(portal, since): # new version
     #   4. Feed these in GAIA one by one
 
 try:
-    engine = sqlalchemy.create_engine(f"mssql+pyodbc://{USER}:{PW}@{SQL_SERVER_NAME}/{DATABASE}?driver={MSSQL_DRIVER}")
-    conn = engine.connect()
-    df = pandas.read_sql("SELECT * FROM DHL_SCHEMA WHERE Portal='Glassdoor'", engine)
-    check_if_responses_exist(df)
-
-
-
-
-
-    print(df)
     print("start")
-    conn = pyodbc.connect(f"DRIVER={MSSQL_DRIVER};Server={SQL_SERVER_NAME};Database={DATABASE};UID={USER};PWD={PW};") 
-    curs = conn.cursor()
+    engine = sqlalchemy.create_engine(f"mssql+pyodbc://{USER}:{PW}@{SQL_SERVER_NAME}/{DATABASE}?driver={MSSQL_DRIVER}")
+    con = engine.connect()
+    if not con:
+        print("problem connecting to DB, exiting...")
     print("connected to db")
     new_reviews_indeed = extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
     print("scraped indeed")
-    put_df_in_sql(new_reviews_indeed)
+    put_df_in_sql(new_reviews_indeed, con)
     print("indeed into db")
     new_reviews_glassdoor = extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
     print("scraped glassdoor")    
-    put_df_in_sql(new_reviews_glassdoor)
+    put_df_in_sql(new_reviews_glassdoor, con)
     print("glassdoor into db")
-except Exception as Argument:
+    print("finished, exiting...")
+except Exception as e:
      # creating/opening a file
     f = open("logs.txt", "a")
  
     # writing in the file
-    f.write(str(Argument))
+    f.write(str(e))
      
     # closing the file
     f.close() 
-
-
-
-
-#unanswered_reviews_df = fetch_unanswered_reviews(curs)
-#generate_responses(unanswered_reviews_df)
-#evaluate_responses(unanswered_reviews_df)
-#post_responses(unanswered_reviews_df)
-
