@@ -144,6 +144,7 @@ def evaluate_responses(df : pandas.DataFrame):
     return df
 
 def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new=True, update_existing=False): 
+    # DEFAULT: ONLY INSERT NEW RECORDS, DON'T UPDATE
     if not(insert_new or update_existing): # Don't insert new + don't update old = no action
         return
     
@@ -313,7 +314,6 @@ def append_kununu_scores(review):
             scores += "\n" + key.replace("_", " ") + ": " + str(review[key]["rating"]) + "/5 "
             if (review[key]["text"] != "" and review[key]["text"] != None):
                 scores += review[key]["text"]
-    print(scores)
     return scores
 
 
@@ -474,8 +474,8 @@ try:
     con = engine.connect()
     if not con:
         print("problem connecting to DB, exiting...")
+        exit()
     print("connected to db")
-
     new_reviews_indeed = extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
     print("scraped indeed")
     put_df_in_sql(new_reviews_indeed, con)
@@ -484,6 +484,10 @@ try:
     print("scraped glassdoor")    
     put_df_in_sql(new_reviews_glassdoor, con)
     print("glassdoor into db")
+    new_reviews_kununu = extract_new_reviews("Kununu", datetime.datetime.now() - datetime.timedelta(2))
+    print("scraped kununu")
+    put_df_in_sql(new_reviews_kununu, con)
+    print("kununu into db")
     print("finished, exiting...")
 except Exception as e:
      # creating/opening a file
