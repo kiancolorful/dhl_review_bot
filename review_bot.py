@@ -145,13 +145,33 @@ def evaluate_responses(df : pandas.DataFrame):
             print("Error processing GAIA reply while evaluating response.")
     return df
 
-def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection): 
-    # Write the DataFrame to the SQL table
-    df.to_sql(SQL_STAGING_TABLE_NAME, con=engine, if_exists='append', index=False) # Commits automatically 
+def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new=True, update_existing=False): 
+    if not(insert_new or update_existing): # Don't insert new + don't update old = no action
+        return
+    
+    # Clear staging table and put dataframe in
+    df.to_sql(SQL_STAGING_TABLE_NAME, con=engine, if_exists='replace', index=False) # Commits automatically 
+
+    if (insert_new and update_existing): # Do both 
+        con.execute(sqlalchemy.text(f"DELETE FROM {SQL_TABLE_NAME} WHERE ID IN (SELECT ID FROM {SQL_STAGING_TABLE_NAME});")) 
+        con.execute(sqlalchemy.text(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME};"))
+    elif insert_new: # Only insert new entries (default)
+        con.execute(sqlalchemy.text(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME} staging WHERE staging.ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});"))
+    elif update_existing: # Only update existing entries
+        con.execute(sqlalchemy.text(f"DELETE FROM {SQL_STAGING_TABLE_NAME} WHERE ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});"))
+        con.execute(sqlalchemy.text(f"DELETE FROM {SQL_TABLE_NAME} WHERE ID IN (SELECT ID FROM {SQL_STAGING_TABLE_NAME});"))
+        con.execute(sqlalchemy.text(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME};"))
     # Merge new rows to main table (ignore dupes) and empty staging table
-    con.execute(sqlalchemy.text(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME} staging WHERE staging.ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});"))
     con.execute(sqlalchemy.text(f"DELETE FROM {SQL_STAGING_TABLE_NAME};"))
     con.commit()
+
+def update_sql_entries(reviews : pandas.DataFrame, con: sqlalchemy.Connection): 
+    try:
+        for review in reviews.iterrows():
+            con.execute(f"UPDATE progress SET CockpitDrill = '{review['Answer (text)']}' WHERE [Dialogue ID] = {review['Dialogue ID']}")
+        con.commit()
+    except Exception as e:
+        print(e)
 
 def fetch_unanswered_reviews(engine, since = False): 
     try:
@@ -235,14 +255,6 @@ def post_responses(df : pandas.DataFrame):
             if(exception == se.NoSuchElementException):
                 driver.close()
                 return
-
-def update_sql_entries(reviews : pandas.DataFrame, con: sqlalchemy.Connection): 
-    try:
-        for review in reviews.iterrows():
-            con.execute(f"UPDATE progress SET CockpitDrill = '{review['Answer (text)']}' WHERE [Dialogue ID] = {review['Dialogue ID']}")
-        con.commit()
-    except Exception as e:
-        print(e)
 
 def check_if_responses_exist(df : pandas.DataFrame): # Checks if reviews have responses already and updates dataframe
     for row in df.itertuples():
@@ -388,6 +400,23 @@ try:
     if not con:
         print("problem connecting to DB, exiting...")
     print("connected to db")
+
+    glassdoor_revs = pandas.read_sql("SELECT * FROM DHL_SCHEMA WHERE Portal='Indeed' AND (ReviewText1!='') AND (ReviewText2!='')", engine)
+    print(glassdoor_revs)
+    for row in glassdoor_revs.iterrows():
+        glassdoor_revs.at[row[0], "ReviewText"] = "Pros: " + glassdoor_revs.at[row[0], "ReviewText1"] + "\n\nCons: " + glassdoor_revs.at[row[0], "ReviewText2"]
+
+    put_df_in_sql(glassdoor_revs, con, False, True)
+
+
+
+
+
+
+
+
+
+
     new_reviews_indeed = extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
     print("scraped indeed")
     put_df_in_sql(new_reviews_indeed, con)
