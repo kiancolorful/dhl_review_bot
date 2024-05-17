@@ -5,10 +5,12 @@ import datetime
 import time
 import json
 import database 
+import re
 
-WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
 MAX_WEX_CALLS = 1
-SCRAPINGDOG_API_KEY = "6619300786d2b244207115b9"
+WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
+SCRAPINGDOG_API_KEY_KIAN = "65a943782f78003318229a41"
+SCRAPINGDOG_API_KEY_ELENA = "6619300786d2b244207115b9"
 
 def check_if_responses_exist(df : pandas.DataFrame): # Checks if reviews have responses already and updates dataframe
     for row in df.itertuples():
@@ -41,15 +43,24 @@ def wex_string_to_datetime(str): # new
 
 def supplement_kununu_data(row): # Supplements Department, Position, Former/Current
     url = row["Link"]
-    response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY}&url={url}&dynamic=false")
+    #response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={url}&dynamic=false")
+    response = requests.get(url) # HOTFIX!!! TODO: REMOVE
     if(response.status_code < 200 or response.status_code > 299): # Bad request
         print(f"Error connecting to Kununu through Scrapingdog. Status code: {response.status_code}")
         return
     soup = bs4.BeautifulSoup(response.text, "html.parser")
     try:
         div = soup.find(class_="index__employmentInfoBlock__wuOtj p-tiny-regular")
-        position = div.find("b").text
-        department = div.find("span").text
+        if not div:
+            return
+        position = div.find("b")
+        if not position:
+            return
+        position = position.text
+        department = div.find("span")
+        if not department:
+            return
+        department = department.text
         row["JobTitle"] = position
         if "Ex-" in position:
             row["CurrentFormerEmployee"] = "Former"
@@ -59,8 +70,11 @@ def supplement_kununu_data(row): # Supplements Department, Position, Former/Curr
             right = department.split("im Bereich ")[1]
             center = right.split(" bei")[0]
             row["Department"] = center
+        year = re.search(" 2[0-9]{3} ", department)
+        if year:
+            row["ContractTerminationKununuOnly"] = int((year.group())[1:-1])
     except: 
-        print("Error parsing Kununu! Maybe they changed their HTML, or there are too many concurrent requests. Code: " + str(response.status_code))
+        print("Error parsing Kununu! Link: " + row["Link"])
 
 def append_kununu_scores(review):
     scores = "\n"
