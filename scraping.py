@@ -14,7 +14,7 @@ SCRAPINGDOG_API_KEY_ELENA = "6619300786d2b244207115b9"
 
 def check_if_responses_exist(df : pandas.DataFrame): # Checks if reviews have responses already and updates dataframe
     for row in df.itertuples():
-        response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY}&url={row.Link}&dynamic=false")
+        response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={row.Link}&dynamic=false")
         if(response.status_code < 200 or response.status_code > 299): # Bad request
             continue
         soup = bs4.BeautifulSoup(response.text, "html.parser")
