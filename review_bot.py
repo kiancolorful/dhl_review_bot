@@ -1,7 +1,3 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-import selenium.common.exceptions as se
-import time
 import datetime
 import sqlalchemy
 import gaia 
