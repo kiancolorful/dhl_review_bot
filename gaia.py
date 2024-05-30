@@ -22,7 +22,8 @@ json_template_chat = {
 	"SensitiveTopic": "", 
 	"EmpathyScore": "",
 	"HelpfulnessScore": "", 
-	"IndividualityScore": ""
+	"IndividualityScore": "",
+    "Sprache": ""
 }
 
 SYSTEM_MESSAGE = {
@@ -41,7 +42,8 @@ Image von DHL als Arbeitgeber stärkst. Beenden Sie Ihre Antwort immer mit einer
 Bauen Sie zudem passend Zeilenumbrüche in Ihre Antwort ein.  
 
 Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_chat)}
-Die eigentliche Antwort auf die Unternehmensbewertung soll in der selben Sprache sein wie die folgende user message.
+
+Die eigentliche Antwort auf die Unternehmensbewertung soll auf Englisch sein.
 Die eigentliche Antwort auf die Unternehmensbewertung soll im Feld "Response" stehen. 
 
 Zusätzlich werden Sie die Empathie, Hilfsbereitschaft und Individualität Ihrer Antwort auf die Unternmehmensbewertung auf 
@@ -173,31 +175,3 @@ def generate_responses(df : pandas.DataFrame):
         df.at[row.Index, "HelpfulnessScore"] = gaia_answer["HelpfulnessScore"]
         df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
     return df
-
-# def generate_responses(reviews_df : pandas.DataFrame): # Needs to be ported to SQLalchemy
-#     for review in reviews_df:
-#         gaia_payload = {
-#             "prompt": PROMPT_PREFIX + "Es wird sehr stressig man wird zwar geschult aber die Realität sieht anders aus. Erster Arbeitstag wird man gleich ins Kaos geschickt. Würde es nicht empfehlen " + "<|endoftext|>", # Specify format together with Weichert
-#             "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
-#             "temperature": 0.7, # Higher number = more risks
-#             "top_p": 0.0, # Similar to temperature
-#             #"logit_bias": {},
-#             #"user": "string",
-#             "n": 1, # Number of responses
-#             "stream": False, # Stream partial progress
-#             #"logprobs": None,
-#             #"suffix": "", # After input or output string
-#             #"echo": False, # Echo prompt 
-#             #"stop": "",    
-#             #"completion_config": "string",
-#             #"presence_penalty": 0,
-#             #"frequency_penalty": 0,
-#             #"best_of": 0
-#         }
-#         response = requests.request("POST", GAIA_URL, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
-#         if(response.status_code < 200 or response.status_code > 299):
-#             print(f"Error connecting to GAIA API. HTTP Status Code: {response.status_code}")
-#             continue
-#         review['Response'] = json.loads(response.text)['choices'][0]['text'] # Interpret JSON Correctly
-#         review['ResponseYesNo'] = "Yes"
-#     return reviews_df

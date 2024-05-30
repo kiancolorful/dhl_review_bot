@@ -31,17 +31,11 @@ try:
     print("extracting new indeed reviews...")
     new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
     print("done")
-    print("generating response and gaia data for indeed reviews...")
-    gaia.generate_responses(new_reviews_indeed)
-    print("done")
     print("putting indeed reviews into database...")
     database.put_df_in_sql(new_reviews_indeed, con)
     print("done")
     print("extracting new glassdoor reviews...")
     new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
-    print("done")
-    print("generating response and gaia data for glassdoor reviews...")
-    gaia.generate_responses(new_reviews_glassdoor)
     print("done")
     print("putting glassdoor reviews into database...")
     database.put_df_in_sql(new_reviews_glassdoor, con)
@@ -49,12 +43,23 @@ try:
     print("extracting new kununu reviews...")
     new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
     print("done")
-    print("generating response and gaia data for kununu reviews...")
-    gaia.generate_responses(new_reviews_kununu)
-    print("done")
     print("putting kununu reviews into database...")
     database.put_df_in_sql(new_reviews_kununu, con)
     print("done")
+
+    print("pulling unanswered reviews from the past few days from database...")
+    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
+    print("done")
+    print("generating response and gaia data for unanswered reviews...")
+    gaia.generate_responses(unanswered_reviews)
+    print("done")
+
+    # UPLOAD HERE
+
+    print("updating database entries to include answers and gaia data...")
+    database.put_df_in_sql(new_reviews_kununu, con, True, True)
+    print("done")
+
     print("finished, exiting...")
 except Exception as e:
      # creating/opening a file
