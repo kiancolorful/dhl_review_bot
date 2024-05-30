@@ -174,4 +174,5 @@ def generate_responses(df : pandas.DataFrame):
         df.at[row.Index, "EmpathyScore"] = gaia_answer["EmpathyScore"]
         df.at[row.Index, "HelpfulnessScore"] = gaia_answer["HelpfulnessScore"]
         df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
+        print(f"generated response for review {row.ID}")
     return df

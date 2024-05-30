@@ -75,12 +75,12 @@ def update_sql_entries(reviews : pandas.DataFrame, con: sqlalchemy.Connection):
     except Exception as e:
         print(e)
 
-def fetch_unanswered_reviews(engine, since = False): 
+def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame: 
     try:
         if since:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ResponseYesNo='No' AND ReviewDate >= {since.strftime('%Y-%m-%d')}", engine)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (ResponseYesNo='No' OR ResponseYesNo IS NULL) AND ReviewDate>='{since.strftime('%Y-%m-%d')}'", engine)
         else:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ResponseYesNo='No'", engine)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (ResponseYesNo='No' OR ResponseYesNo IS NULL)", engine)
         return df
     except pyodbc.Error as exception:
         print(exception)
