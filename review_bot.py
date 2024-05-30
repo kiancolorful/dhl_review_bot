@@ -27,7 +27,7 @@ try:
         print("problem connecting to DB, exiting...")
         exit()
     print("connected to db")
-    new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
+    new_reviews_indeed = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(2))
     print("scraped indeed")
     database.put_df_in_sql(new_reviews_indeed, con)
     print("indeed into db")
