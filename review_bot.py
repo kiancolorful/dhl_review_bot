@@ -66,7 +66,6 @@ try:
     f.close()
 
     print("done")
-    exit()
 
     # UPLOAD HERE
 
