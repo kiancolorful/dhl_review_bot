@@ -6,6 +6,7 @@ import time
 import json
 import database 
 import re
+from utils import log
 
 MAX_WEX_CALLS = 1
 WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
@@ -46,7 +47,7 @@ def supplement_kununu_data(row): # Supplements Department, Position, CurrentForm
     #response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={url}&dynamic=false")
     response = requests.get(url) # HOTFIX!!! TODO: REMOVE
     if(response.status_code < 200 or response.status_code > 299): # Bad request
-        print(f"Error connecting to Kununu through Scrapingdog. Status code: {response.status_code}")
+        log(f"Error connecting to Kununu through Scrapingdog. Row ID: {row.ID}, Status code: {response.status_code}")
         return
     soup = bs4.BeautifulSoup(response.text, "html.parser")
     try:

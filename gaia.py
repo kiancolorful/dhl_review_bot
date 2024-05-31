@@ -171,8 +171,7 @@ def generate_responses(df : pandas.DataFrame):
         if(gaia_answer["Response"] == "" or ("(Leer)" in gaia_answer["Response"])):
             continue
 
-        print(row.ID)
-        print(gaia_answer)
+        print(str(row.Index) + str(row.ID))
         df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
         df.at[row.Index, "ResponseYesNo"] = "Yes"
         df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]

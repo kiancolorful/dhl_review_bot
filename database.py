@@ -47,9 +47,9 @@ def sql_insert_row(table_name, row, connection):
     except Exception as e:
         print(f"Error inserting row into SQL table: {e}")
 
-def put_df_in_sql(df, con : sqlalchemy.Connection, insert_new=True, update_existing=False): 
+def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new=True, update_existing=False): 
     # DEFAULT: ONLY INSERT NEW RECORDS, DON'T UPDATE
-    if not(insert_new or update_existing) or (not df): # Don't insert new + don't update old = no action, empty df = no action
+    if not(insert_new or update_existing) or (df.empty): # Don't insert new + don't update old = no action, empty df = no action
         return
     
     # Clear staging table and put dataframe in
