@@ -28,7 +28,7 @@ try:
     print("connecting to db...")
     con = engine.connect()
     if not con:
-        print("problem connecting to DB, exiting...")
+        log("problem connecting to DB, exiting...")
         exit()
     print("done")
     print("extracting new indeed reviews...")
