@@ -1,6 +1,7 @@
 import pandas
 import requests
 import json
+from utils import log
 
 GAIA_DEPLOYMENT_ID = "gpt-4-1106" #"gpt-35-turbo-0301"
 API_VERSION = "2023-05-15"
@@ -17,13 +18,12 @@ json_template_chat = {
 	"Response": "",
 	"StateRegion": "",
 	"Country": "",
-	"MainpositiveAspect": "", 
-	"MainAreaofImprovement": "", 
+	"MainPositiveAspect": "", 
+	"MainAreaOfImprovement": "", 
 	"SensitiveTopic": "", 
 	"EmpathyScore": "",
 	"HelpfulnessScore": "", 
-	"IndividualityScore": "",
-    "Sprache": ""
+	"IndividualityScore": ""
 }
 
 SYSTEM_MESSAGE = {
@@ -77,6 +77,7 @@ Falls es sich in der Bewertung um ein sensibles Thema handelt (z.B. Rassismus, S
 
 Als letztes werden Sie aus der Unternehmensbewertung herauslesen, welche Eigenschaft des Jobs der Arbeitnehmer besonders gut findet, und welche er 
 oder sie besonders schlecht findet. Wählen Sie aus den folgenden Listen positiver und negativer Eigenschaften jeweils die passendste Kategorie. 
+Falls keine Kategorie zutrifft, sollen Sie die Kategorie "Uncategorized" wählen.
 Schreiben Sie Ihre gewählten Eigenschaften jeweils in die Felder "MainPositiveAspect" und "MainAreaOfImprovement".
 
 Clusters for positive aspects:
@@ -155,8 +156,11 @@ def generate_responses(df : pandas.DataFrame):
             temp = temp.split("}")[0]
             temp = "{" + temp + "}"
             gaia_answer = json.loads(temp)
-        except:
+            gaia_answer = requests.structures.CaseInsensitiveDict(gaia_answer) # Sometimes GAIA messes up the casing of the keys
+        except Exception as e:
             print("Error processing GAIA reply while evaluating response.")
+            log(e, "Error processing GAIA reply while evaluating response")
+            pass
 
         df.at[row.Index, "SensitiveTopic"] = gaia_answer["SensitiveTopic"]
         if row.Location:
@@ -167,6 +171,8 @@ def generate_responses(df : pandas.DataFrame):
         if(gaia_answer["Response"] == "" or ("(Leer)" in gaia_answer["Response"])):
             continue
 
+        print(row.ID)
+        print(gaia_answer)
         df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
         df.at[row.Index, "ResponseYesNo"] = "Yes"
         df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]

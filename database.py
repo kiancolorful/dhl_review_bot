@@ -1,6 +1,7 @@
 import pyodbc
 import sqlalchemy
 import pandas
+from utils import log
 
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
 SQL_SERVER_NAME = r"85.215.196.5"
@@ -73,7 +74,7 @@ def update_sql_entries(reviews : pandas.DataFrame, con: sqlalchemy.Connection):
             con.execute(f"UPDATE progress SET CockpitDrill = '{review['Answer (text)']}' WHERE [Dialogue ID] = {review['Dialogue ID']}")
         con.commit()
     except Exception as e:
-        print(e)
+        log(e)
 
 def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame: 
     try:
@@ -83,4 +84,4 @@ def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame:
             df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (ResponseYesNo='No' OR ResponseYesNo IS NULL)", engine)
         return df
     except pyodbc.Error as exception:
-        print(exception)
+        log(exception)

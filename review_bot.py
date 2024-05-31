@@ -5,12 +5,14 @@ import database
 import posting 
 import scraping
 import pandas
+from utils import log
 
 # Constants
 WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
 MAX_WEX_CALLS = 1
 
 SCRAPINGDOG_API_KEY = "6619300786d2b244207115b9"
+
 
 # Main
 
@@ -48,18 +50,23 @@ try:
     # database.put_df_in_sql(new_reviews_kununu, con)
     # print("done")
 
-    pandas.set_option("display.max_rows", None)
-    pandas.set_option("display.max_columns", None)
-    pandas.set_option('display.width', None)
-
-
     print("pulling unanswered reviews from the past few days from database...")
-    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(2))
+    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(3))
     print("done")
-    print(unanswered_reviews)
+    
+    f = open("df.txt", "w")
+    f.write(unanswered_reviews.to_string())
+    f.close()
+
     print("generating response and gaia data for unanswered reviews...")
     gaia.generate_responses(unanswered_reviews)
+
+    f = open("df.txt", "a")
+    f.write("\n\n\n" + unanswered_reviews.to_string())
+    f.close()
+
     print("done")
+    exit()
 
     # UPLOAD HERE
 
@@ -69,11 +76,4 @@ try:
 
     print("finished, exiting...")
 except Exception as e:
-     # creating/opening a file
-    f = open("logs.txt", "a")
- 
-    # writing in the file
-    f.write(str(e))
-     
-    # closing the file
-    f.close() 
+    log(e)
