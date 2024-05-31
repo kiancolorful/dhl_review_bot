@@ -4,6 +4,7 @@ import gaia
 import database 
 import posting 
 import scraping
+import pandas
 
 # Constants
 WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
@@ -47,9 +48,15 @@ try:
     # database.put_df_in_sql(new_reviews_kununu, con)
     # print("done")
 
+    pandas.set_option("display.max_rows", None)
+    pandas.set_option("display.max_columns", None)
+    pandas.set_option('display.width', None)
+
+
     print("pulling unanswered reviews from the past few days from database...")
     unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(2))
     print("done")
+    print(unanswered_reviews)
     print("generating response and gaia data for unanswered reviews...")
     gaia.generate_responses(unanswered_reviews)
     print("done")
@@ -57,7 +64,7 @@ try:
     # UPLOAD HERE
 
     print("updating database entries to include answers and gaia data...")
-    database.put_df_in_sql(new_reviews_kununu, con, True, True)
+    database.put_df_in_sql(unanswered_reviews, con, True, True)
     print("done")
 
     print("finished, exiting...")
