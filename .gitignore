@@ -1,3 +1,8 @@
-gaia_tests.py
 ms_sql_test.py
 __pycache__/
+old_swaggers/
+azcopy.exe
+testFile.txt
+az_blob_test.py
+logs.txt
+df.txt

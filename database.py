@@ -1,6 +1,7 @@
 import pyodbc
 import sqlalchemy
 import pandas
+from utils import log
 
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
 SQL_SERVER_NAME = r"85.215.196.5"
@@ -46,9 +47,9 @@ def sql_insert_row(table_name, row, connection):
     except Exception as e:
         print(f"Error inserting row into SQL table: {e}")
 
-def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new=True, update_existing=False): 
+def put_df_in_sql(df, con : sqlalchemy.Connection, insert_new=True, update_existing=False): 
     # DEFAULT: ONLY INSERT NEW RECORDS, DON'T UPDATE
-    if not(insert_new or update_existing): # Don't insert new + don't update old = no action
+    if not(insert_new or update_existing) or (not df): # Don't insert new + don't update old = no action, empty df = no action
         return
     
     # Clear staging table and put dataframe in
@@ -73,14 +74,14 @@ def update_sql_entries(reviews : pandas.DataFrame, con: sqlalchemy.Connection):
             con.execute(f"UPDATE progress SET CockpitDrill = '{review['Answer (text)']}' WHERE [Dialogue ID] = {review['Dialogue ID']}")
         con.commit()
     except Exception as e:
-        print(e)
+        log(e)
 
-def fetch_unanswered_reviews(engine, since = False): 
+def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame: 
     try:
         if since:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ResponseYesNo='No' AND ReviewDate >= {since.strftime('%Y-%m-%d')}", engine)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (ResponseYesNo='No' OR ResponseYesNo IS NULL) AND ReviewDate>='{since.strftime('%Y-%m-%d')}'", engine)
         else:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ResponseYesNo='No'", engine)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (ResponseYesNo='No' OR ResponseYesNo IS NULL)", engine)
         return df
     except pyodbc.Error as exception:
-        print(exception)
+        log(exception)
