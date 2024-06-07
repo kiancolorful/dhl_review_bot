@@ -1,6 +1,7 @@
 import pandas
 import requests
 import json
+import datetime
 from utils import log
 
 GAIA_DEPLOYMENT_ID = "gpt-4-1106" #"gpt-35-turbo-0301"
@@ -73,7 +74,7 @@ Individualität:
 
 Falls ein Ort angegeben ist, werden Sie auch die Region (bzw. das Bundesland) und das Land, in denen sich dieser Ort befindet, bestimmen und in Ihrer Antwort zurückgeben. 
 
-Falls es sich in der Bewertung um ein sensibles Thema handelt (z.B. Rassismus, Sexismus, Beleidigung, usw.), werden Sie im Feld "SensitiveTopic" "Yes" eintragen, sonst "No".
+Falls es sich in der Bewertung um ein sensibles Thema handelt (z.B. Rassismus, Sexismus, Beleidigung, Belästigung, usw.), werden Sie im Feld "SensitiveTopic" "Yes" eintragen, sonst "No".
 
 Als letztes werden Sie aus der Unternehmensbewertung herauslesen, welche Eigenschaft des Jobs der Arbeitnehmer besonders gut findet, und welche er 
 oder sie besonders schlecht findet. Wählen Sie aus den folgenden Listen positiver und negativer Eigenschaften jeweils die passendste Kategorie. 
@@ -174,6 +175,8 @@ def generate_responses(df : pandas.DataFrame):
         print(str(row.Index) + str(row.ID))
         df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
         df.at[row.Index, "ResponseYesNo"] = "Yes"
+        df.at[row.Index, "EstResponseDate"] = datetime.date.today()
+        df.at[row.Index, "ResponseTimeDays"] = (datetime.date.today() - df.at[row.Index, "ReviewDate"]).days
         df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]
         df.at[row.Index, "MainAreaofImprovement"] = gaia_answer["MainAreaofImprovement"]
         df.at[row.Index, "EmpathyScore"] = gaia_answer["EmpathyScore"]

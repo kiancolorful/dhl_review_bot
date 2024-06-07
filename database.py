@@ -4,7 +4,7 @@ import pandas
 from utils import log
 
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
-SQL_SERVER_NAME = r"WIN-CIH1M1J41BG" # IP: 82.215.196.5, Instance name: WIN-CIH1M1J41BG
+SQL_SERVER_NAME = r"85.215.196.5" # IP: 85.215.196.5, Instance name: WIN-CIH1M1J41BG
 DATABASE = 'master'
 SQL_TABLE_NAME = 'DHL_SCHEMA'#'CC_DATA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
@@ -31,10 +31,10 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "ResponseYesNo": "nvarchar(10)", 
     "Response": "nvarchar(MAX)", 
     "EstResponseDate": "date", 
+    "ResponseTimeDays": "int", 
     "EmpathyScore": "float", 
     "HelpfulnessScore": "float", 
     "IndividualityScore": "float", 
-    "ResponseTimeScore": "float", 
     "OverallScore": "float", 
     "WeightedScore": "float"
 }

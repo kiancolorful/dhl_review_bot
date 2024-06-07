@@ -39,7 +39,7 @@ def check_if_responses_exist(df : pandas.DataFrame): # Checks if reviews have re
     return df # Return anyway
 
 
-def wex_string_to_datetime(str): # new 
+def wex_string_to_datetime(str): 
     return datetime.datetime.strptime(str, "%Y-%m-%dT%H:%M:%S")
 
 def supplement_kununu_data(row): # Supplements Department, Position, CurrentFormerEmployee, ContractTerminationKununuOnly
