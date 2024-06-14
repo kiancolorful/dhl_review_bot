@@ -15,6 +15,7 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "ID": "nvarchar(50)", 
     "Link": "nvarchar(255)", 
     "ReviewTitle": "nvarchar(255)", 
+    "ReviewOnlineChecked": "date", 
     "ReviewDate": "date", 
     "OverallSatisfaction": "float", 
     "JobTitle": "nvarchar(50)",
@@ -25,11 +26,13 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "StateRegion": "nvarchar(50)", 
     "Country": "nvarchar(50)", 
     "ReviewText": "nvarchar(MAX)", 
+    "ReviewTextEN": "nvarchar(MAX)", 
     "MainpositiveAspect": "nvarchar(255)", 
     "MainAreaofImprovement": "nvarchar(255)", 
     "SensitiveTopic": "nvarchar(10)", 
-    "ResponseYesNo": "nvarchar(10)", 
+    "ResponsePostedYesNo": "nvarchar(10)", 
     "Response": "nvarchar(MAX)", 
+    "ResponseEN": "nvarchar(MAX)", 
     "EstResponseDate": "date", 
     "ResponseTimeDays": "int", 
     "EmpathyScore": "float", 
@@ -79,9 +82,9 @@ def update_sql_entries(reviews : pandas.DataFrame, con: sqlalchemy.Connection):
 def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame: 
     try:
         if since:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (ResponseYesNo='No' OR ResponseYesNo IS NULL) AND ReviewDate>='{since.strftime('%Y-%m-%d')}'", engine)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (Response='' OR Response IS NULL) AND ReviewDate>='{since.strftime('%Y-%m-%d')}'", engine)
         else:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (ResponseYesNo='No' OR ResponseYesNo IS NULL)", engine)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (Response='' OR Response IS NULL)", engine)
         return df
     except pyodbc.Error as exception:
         log(exception)

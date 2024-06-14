@@ -35,7 +35,7 @@ def post_responses(df : pandas.DataFrame):
                     timer(random.uniform(3.0, 5.0))
                     next_elem = driver.find_element(By.XPATH, "//textarea[@id='ifl-TextAreaFormField-:r0:']") # Comment Textarea
                     next_elem.send_keys(row["Response"])
-                    row["ResponseYesNo"] = "Yes"
+                    row["ResponsePostedYesNo"] = "Yes"
                     timer(random.uniform(3.0, 5.0))
                     next_elem = driver.find_element(By.XPATH, "//button[@class='css-1orlm12 e8ju0x50']") # Post button
                     next_elem.click()
@@ -49,7 +49,7 @@ def post_responses(df : pandas.DataFrame):
                     timer(random.uniform(3.0, 5.0)) # Wait for page to reload
                     next_elem = driver.find_element(By.XPATH, "//*[@id='new-response']/form/textarea") # Comment Textarea
                     next_elem.send_keys(row["Response"])
-                    row["ResponseYesNo"] = "Yes"
+                    row["ResponsePostedYesNo"] = "Yes"
                     timer(random.uniform(3.0, 5.0))
                     next_elem = driver.find_element(By.XPATH, "//*[@id='new-response']/form/div/button[1]") # Post button
                     next_elem.click()

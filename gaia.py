@@ -16,7 +16,10 @@ GAIA_HEADERS = {
     }
 
 json_template_chat = {
+    "Language": "",
+    "ReviewTextEN": "",
 	"Response": "",
+    "ResponseEN": "",
 	"StateRegion": "",
 	"Country": "",
 	"MainPositiveAspect": "", 
@@ -44,7 +47,9 @@ Bauen Sie zudem passend Zeilenumbrüche in Ihre Antwort ein.
 
 Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_chat)}
 
-Die eigentliche Antwort auf die Unternehmensbewertung soll auf Englisch sein.
+Schreiben Sie die Sprache der Unternehmensbewertung ins Feld "Language".
+
+Die eigentliche Antwort auf die Unternehmensbewertung soll auf der selben Sprache sein, die Sie gerade ins Feld "Language" geschrieben haben.
 Die eigentliche Antwort auf die Unternehmensbewertung soll im Feld "Response" stehen. 
 
 Zusätzlich werden Sie die Empathie, Hilfsbereitschaft und Individualität Ihrer Antwort auf die Unternmehmensbewertung auf 
@@ -174,7 +179,7 @@ def generate_responses(df : pandas.DataFrame):
 
         print(str(row.Index) + str(row.ID))
         df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
-        df.at[row.Index, "ResponseYesNo"] = "Yes"
+        #df.at[row.Index, "ResponseYesNo"] = "Yes"
         df.at[row.Index, "EstResponseDate"] = datetime.date.today()
         df.at[row.Index, "ResponseTimeDays"] = (datetime.date.today() - df.at[row.Index, "ReviewDate"]).days
         df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]
