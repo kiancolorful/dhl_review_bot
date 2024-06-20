@@ -96,7 +96,7 @@ def extract_new_reviews(portal : str, since : datetime): # new version
             while(pagenum < MAX_WEX_CALLS):
                 response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/indeed?id=DHL&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 20}")
                 if(response.status_code < 200 or response.status_code > 299):
-                    print(f"Error connecting to Wextractor. Status code: {response.status_code}")
+                    log(f"Error connecting to Wextractor. Status code: {response.status_code}")
                     return
                 responsetext = response.text.replace("\n", " ")
                 responsetext = responsetext.replace("\r", "")
@@ -193,7 +193,7 @@ def extract_new_reviews(portal : str, since : datetime): # new version
             while(pagenum < MAX_WEX_CALLS):
                 response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/kununu?auth_token={WEXTRACTOR_AUTH_TOKEN}&id=https://www.kununu.com/de/deutsche-post&offset={pagenum * 10}")
                 if(response.status_code < 200 or response.status_code > 299):
-                    print(f"Error connecting to Wextractor. Status code: {response.status_code}")
+                    log(f"Error connecting to Wextractor. Status code: {response.status_code}")
                     return
                 responsetext = response.text.replace("\n", " ")
                 responsetext = responsetext.replace("\r", "")
@@ -230,6 +230,6 @@ def extract_new_reviews(portal : str, since : datetime): # new version
                     list_of_dicts.append(row)
                 pagenum += 1
         case other:
-            print(f"Error extracting reviews from Wextractor, \"{portal}\" is not a supported portal.")
+            log(f"Error extracting reviews from Wextractor, \"{portal}\" is not a supported portal.")
             return None
     return pandas.DataFrame(list_of_dicts)

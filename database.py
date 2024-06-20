@@ -48,7 +48,7 @@ def sql_insert_row(table_name, row, connection):
         df = pandas.DataFrame([row_dict])
         df.to_sql(name=table_name, con=connection, if_exists='append', index=False)
     except Exception as e:
-        print(f"Error inserting row into SQL table: {e}")
+        log(e, "Error inserting row into SQL table")
 
 def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new=True, update_existing=False): 
     # DEFAULT: ONLY INSERT NEW RECORDS, DON'T UPDATE

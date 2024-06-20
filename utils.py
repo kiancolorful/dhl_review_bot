@@ -2,8 +2,10 @@ import datetime
 
 def log(ex, header: str=None):
     f = open("logs.txt", "a")
-    f.write(datetime.datetime.now().strftime("%Y-%m-%d, %H:%M:%S") + " --- ")
+    out = datetime.datetime.now().strftime("%Y-%m-%d, %H:%M:%S") + " --- "
     if header:
-        f.write(header + ": ")
-    f.write(str(ex) + "\n")
+        out += header + ": "
+    out += str(ex) + "\n"
+    print(out)
+    f.write(out)
     f.close() 
