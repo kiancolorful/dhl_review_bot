@@ -39,7 +39,8 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "HelpfulnessScore": "float", 
     "IndividualityScore": "float", 
     "OverallScore": "float", 
-    "WeightedScore": "float"
+    "WeightedScore": "float",
+    "DeveloperComment": "nvarchar(255)"
 }
 
 def sql_insert_row(table_name, row, connection): 
@@ -70,14 +71,6 @@ def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new
     # Merge new rows to main table (ignore dupes) and empty staging table
     con.execute(sqlalchemy.text(f"DELETE FROM {SQL_STAGING_TABLE_NAME};"))
     con.commit()
-
-def update_sql_entries(reviews : pandas.DataFrame, con: sqlalchemy.Connection): 
-    try:
-        for review in reviews.iterrows():
-            con.execute(f"UPDATE progress SET CockpitDrill = '{review['Answer (text)']}' WHERE [Dialogue ID] = {review['Dialogue ID']}")
-        con.commit()
-    except Exception as e:
-        log(e)
 
 def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame: 
     try:

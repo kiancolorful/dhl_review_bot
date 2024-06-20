@@ -155,6 +155,7 @@ def generate_responses(df : pandas.DataFrame):
         response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
         if(response.status_code < 200 or response.status_code > 299):
             log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]")
+            df.at[row.Index, "DeveloperComment"] = str(response.status_code)
             continue
         try:
             temp = json.loads(response.text)['choices'][0]['message']['content']
