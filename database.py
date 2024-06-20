@@ -62,7 +62,7 @@ def sql_insert_row(table_name, row, connection):
         df = pandas.DataFrame([row_dict])
         df.to_sql(name=table_name, con=connection, if_exists='append', index=False)
     except Exception as e:
-        log(e, "Error inserting row into SQL table")
+        log(e, __file__, "Error inserting row into SQL table")
 
 def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new=True, update_existing=False): 
     # DEFAULT: ONLY INSERT NEW RECORDS, DON'T UPDATE
@@ -100,12 +100,14 @@ def fetch_refresh_reviews(con) -> pandas.DataFrame:
         # new reviews
         df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ReviewDate='{(datetime.date.today() - datetime.timedelta(NEW_REVIEW_REFRESH_DELAY)).strftime('%Y-%m-%d')}' AND (OnlineYesNo IS NULL OR OnlineYesNo='Yes')", con)
         #sensitive reviews
-        df.append(pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ReviewDate>='{(datetime.date.today() - datetime.timedelta(SENSITIVE_REVIEW_REFRESH_INTERVAL)).strftime('%Y-%m-%d')}' AND RefreshDate<='{(datetime.date.today() - datetime.timedelta(SENSITIVE_REVIEW_REFRESH_FREQUENCY)).strftime('%Y-%m-%d')}' AND (OnlineYesNo IS NULL OR OnlineYesNo='Yes')", con))
+        df2 = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ReviewDate>='{(datetime.date.today() - datetime.timedelta(SENSITIVE_REVIEW_REFRESH_INTERVAL)).strftime('%Y-%m-%d')}' AND RefreshDate<='{(datetime.date.today() - datetime.timedelta(SENSITIVE_REVIEW_REFRESH_FREQUENCY)).strftime('%Y-%m-%d')}' AND (OnlineYesNo IS NULL OR OnlineYesNo='Yes')", con)
         #old reviews
+        df.append(df2, ignore_index=True)
+        
         if(OLD_REVIEW_REFRESH_COUNT < 0): # Get all reviews that share the oldest RefreshDate
-            df.append(pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE RefreshDate=(SELECT MIN(RefreshDate) from {SQL_TABLE_NAME}) AND (OnlineYesNo='Yes' OR OnlineYesNo IS NULL)", con))
+            df.concat(pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE RefreshDate=(SELECT MIN(RefreshDate) from {SQL_TABLE_NAME}) AND (OnlineYesNo='Yes' OR OnlineYesNo IS NULL)", con))
         else:
-            df.append(pandas.read_sql(f"SELECT TOP {OLD_REVIEW_REFRESH_COUNT} * FROM {SQL_TABLE_NAME} ORDER BY RefreshDate ASC", con))
+            df.concat(pandas.read_sql(f"SELECT TOP {OLD_REVIEW_REFRESH_COUNT} * FROM {SQL_TABLE_NAME} ORDER BY RefreshDate ASC", con))
         return df
     except Exception as ex:
         log(ex)
