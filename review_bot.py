@@ -7,13 +7,6 @@ import scraping
 import pandas
 from utils import log
 
-# Constants
-WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
-MAX_WEX_CALLS = 1
-
-SCRAPINGDOG_API_KEY = "6619300786d2b244207115b9"
-
-
 # Main
 
     # Steps: 
@@ -60,17 +53,17 @@ try:
 
     print("generating response and gaia data for unanswered reviews...")
     gaia.generate_responses(unanswered_reviews)
-    
     f = open("df.txt", "a")
     f.write("\n\n\n" + unanswered_reviews.to_string())
     f.close()
-
     print("done")
-
-    # UPLOAD HERE
 
     print("updating database entries to include answers and gaia data...")
     database.put_df_in_sql(unanswered_reviews, con, True, True)
+    print("done")
+
+    print("checking if older reviews have been removed from platforms or otherwise updated...")
+    scraping.refresh_reviews(con)
     print("done")
 
     print("finished, exiting...")

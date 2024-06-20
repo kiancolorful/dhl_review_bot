@@ -8,35 +8,13 @@ import database
 import re
 from utils import log
 
+# Wextractor info
 MAX_WEX_CALLS = 1
 WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
+
+# Scrapingdog info
 SCRAPINGDOG_API_KEY_KIAN = "65a943782f78003318229a41"
 SCRAPINGDOG_API_KEY_ELENA = "6619300786d2b244207115b9"
-
-def check_if_responses_exist(df : pandas.DataFrame): # Checks if reviews have responses already and updates dataframe
-    for row in df.itertuples():
-        response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={row.Link}&dynamic=false")
-        if(response.status_code < 200 or response.status_code > 299): # Bad request
-            continue
-        soup = bs4.BeautifulSoup(response.text, "html.parser")
-        match row.Portal.lower():
-            case "indeed":
-                rev = soup.find(class_="css-14nhnfd e37uo190")
-                resp = rev.find(class_="css-j3kgaw e1wnkr790")
-                if resp:
-                    df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
-                    df.at[row.Index, "Response"] = resp.text
-                else:
-                    df.at[row.Index, "ResponsePostedYesNo"] = "No"
-            case "glassdoor":
-                rev = soup.find(class_="review-details_reviewDetails__4N3am")
-                resp = rev.find(class_="review-details_isCollapsed__5mhq_ newEmployerResponseText px-std")
-                if resp:
-                    df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
-                    df.at[row.Index, "Response"] = resp.text
-                else:
-                    df.at[row.Index, "ResponsePostedYesNo"] = "No"
-    return df # Return anyway
 
 
 def wex_string_to_datetime(str): 
@@ -117,6 +95,8 @@ def extract_new_reviews(portal : str, since : datetime): # new version
                     row["Link"] = review["url"]
                     row["ReviewTitle"] = review["title"]
                     row["ReviewDate"] = wex_string_to_datetime(review["datetime"].split('.', 1)[0]) 
+                    row["RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
+                    row["OnlineYesNo"] = "Yes"
                     row["OverallSatisfaction"] = float(review["rating"])
                     row["JobTitle"] = review["reviewer"]
                     row["Department"] = None # Kununu only?
@@ -160,6 +140,8 @@ def extract_new_reviews(portal : str, since : datetime): # new version
                         row["Link"] = review["url"]
                         row["ReviewTitle"] = review["title"]
                         row["ReviewDate"] = wex_string_to_datetime(review["datetime"].split('.', 1)[0]) # Remove milliseconds
+                        row["RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
+                        row["OnlineYesNo"] = "Yes"
                         row["OverallSatisfaction"] = float(review["rating"])
                         row["JobTitle"] = review["reviewer"]
                         row["Department"] = None # Kununu only?
@@ -210,6 +192,8 @@ def extract_new_reviews(portal : str, since : datetime): # new version
                     row["Link"] = review["url"]
                     row["ReviewTitle"] = review["title"]
                     row["ReviewDate"] = wex_string_to_datetime(review["datetime"].split('.', 1)[0]) 
+                    row["RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
+                    row["OnlineYesNo"] = "Yes"
                     row["OverallSatisfaction"] = float(review["rating"])
                     row["Department"] = None # Filled by supplement_kununu_data
                     row["ContractTerminationKununuOnly"] = None # Filled by supplement_kununu_data
@@ -233,3 +217,52 @@ def extract_new_reviews(portal : str, since : datetime): # new version
             log(f"Error extracting reviews from Wextractor, \"{portal}\" is not a supported portal.")
             return None
     return pandas.DataFrame(list_of_dicts)
+
+def refresh_reviews(con):
+    # get reviews, look them up, update df, reinsert
+    df = database.fetch_refresh_reviews(con)
+
+    # look reviews up and update df
+    for row in df.itertuples():
+        #TODO response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={row.Link}&dynamic=false")
+        response = requests.get(row.Link)
+        if(response.status_code < 200 or response.status_code > 299): # Bad request
+            if(response.status_code == 404): # Review was taken offline
+                df.at[row.Index, "OnlineYesNo"] = "No"
+                df.at[row.Index, "RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
+            continue
+        soup = bs4.BeautifulSoup(response.text, "html.parser")
+        match row.Portal.lower():
+            case "indeed":
+                rev = soup.find(class_="css-14nhnfd e37uo190")
+                resp = rev.find(class_="css-j3kgaw e1wnkr790")
+                if resp:
+                    df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
+                    for br in resp.find_all("br"):
+                        br.replace_with("\n")
+                    df.at[row.Index, "Response"] = resp.text
+                else:
+                    df.at[row.Index, "ResponsePostedYesNo"] = "No"
+            case "glassdoor":
+                rev = soup.find(class_="review-details_reviewDetails__4N3am")
+                resp = rev.find(class_="review-details_isCollapsed__5mhq_ newEmployerResponseText px-std")
+                if resp:
+                    df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
+                    for br in resp.find_all("br"):
+                        br.replace_with("\n")
+                    df.at[row.Index, "Response"] = resp.text
+                else:
+                    df.at[row.Index, "ResponsePostedYesNo"] = "No"
+            case "kununu":
+                resp = soup.find(class_="index__responseBlock__A5fqZ")
+                if resp:
+                    df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
+                    resp = resp.find(class_="p-small-regular")
+                    for br in resp.find_all("br"):
+                        br.replace_with("\n")
+                    df.at[row.Index, "Response"] = resp.text
+                else:
+                    df.at[row.Index, "ResponsePostedYesNo"] = "No"
+
+    # reinsert updated reviews            
+    database.put_df_in_sql(df, con, False, True)

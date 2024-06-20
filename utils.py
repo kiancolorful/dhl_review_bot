@@ -5,7 +5,7 @@ def log(ex, header: str=None):
     out = datetime.datetime.now().strftime("%Y-%m-%d, %H:%M:%S") + " --- "
     if header:
         out += header + ": "
-    out += str(ex) + "\n"
+    out += str(ex)
     print(out)
-    f.write(out)
+    f.write(out + "\n")
     f.close() 

@@ -177,9 +177,7 @@ def generate_responses(df : pandas.DataFrame):
         if(gaia_answer["Response"] == "" or ("(Leer)" in gaia_answer["Response"])):
             continue
 
-        print(str(row.Index) + str(row.ID))
         df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
-        #df.at[row.Index, "ResponseYesNo"] = "Yes"
         df.at[row.Index, "EstResponseDate"] = datetime.date.today()
         df.at[row.Index, "ResponseTimeDays"] = (datetime.date.today() - df.at[row.Index, "ReviewDate"]).days
         df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]
@@ -187,5 +185,5 @@ def generate_responses(df : pandas.DataFrame):
         df.at[row.Index, "EmpathyScore"] = gaia_answer["EmpathyScore"]
         df.at[row.Index, "HelpfulnessScore"] = gaia_answer["HelpfulnessScore"]
         df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
-        print(f"generated response for review {row.ID}")
+        print(f"({str(row.Index)}/{str(len(df.index))}) generated response for review {row.ID}")
     return df
