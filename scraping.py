@@ -218,10 +218,7 @@ def extract_new_reviews(portal : str, since : datetime): # new version
             return None
     return pandas.DataFrame(list_of_dicts)
 
-def refresh_reviews(con):
-    # get reviews, look them up, update df, reinsert
-    df = database.fetch_refresh_reviews(con)
-
+def refresh_reviews(df : pandas.DataFrame, con):
     # look reviews up and update df
     for row in df.itertuples():
         #TODO response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={row.Link}&dynamic=false")
@@ -263,6 +260,5 @@ def refresh_reviews(con):
                     df.at[row.Index, "Response"] = resp.text
                 else:
                     df.at[row.Index, "ResponsePostedYesNo"] = "No"
-
-    # reinsert updated reviews            
-    database.put_df_in_sql(df, con, False, True)
+    # Return anyway
+    return df
