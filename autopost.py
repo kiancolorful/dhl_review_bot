@@ -18,9 +18,6 @@ PW = 'Gosling1'
 HK_NEXT = "right"
 HK_QUIT = "esc"
 
-# def next_review(df, counter):
-#     print("right was pressed!")
-
 def quit(df, con):
     print("updating database before quitting...")
     # Clear staging table and put dataframe in
@@ -50,21 +47,20 @@ print("done")
 # Get responses
 try:
     df = pandas.read_sql(f"SELECT Link, Response FROM {SQL_TABLE_NAME} WHERE ResponsePostedYesNo='No'", con)
-    counter = 0
 except:
     print("Error connecting to database, exiting...")
     time.sleep(1)
     con.close()
 
 # Set hotkeys
-#keyboard.add_hotkey(HK_NEXT, next_review(df, counter))
-keyboard.add_hotkey(HK_QUIT, quit(df, con))
+keyboard.add_hotkey(HK_QUIT, quit, args=(df, con))
 
 # Start posting
-for row in df:
+for row in df.itertuples():
     webbrowser.open(row.Link)
     pyperclip.copy(row.Response)
     keyboard.wait(HK_NEXT)
+    #df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
 
-
+print("All responses posted! Saving and exiting...")
 quit(con)
