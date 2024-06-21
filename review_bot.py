@@ -62,13 +62,13 @@ try:
     database.put_df_in_sql(unanswered_reviews, con, True, True)
     print("done")
 
-    print("checking if older reviews have been removed from platforms or otherwise updated...")
-    refresh = database.fetch_refresh_reviews(con)
-    scraping.refresh_reviews(refresh, con)
-    print("done")
-    print("updating database")
-    database.put_df_in_sql(refresh, con, False, True)
-    print("done")
+    # print("checking if older reviews have been removed from platforms or otherwise updated...")
+    # refresh = database.fetch_refresh_reviews(con)
+    # scraping.refresh_reviews(refresh, con)
+    # print("done")
+    # print("updating database")
+    # database.put_df_in_sql(refresh, con, False, True)
+    # print("done")
 
     print("finished, exiting...")
 except Exception as e:
