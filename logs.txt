@@ -1,0 +1,5 @@
+2024-06-24, 18:07:05 --- (pyodbc.ProgrammingError) ('42S22', "[42S22] [Microsoft][ODBC Driver 17 for SQL Server][SQL Server]Invalid column name 'last_modified'. (207) (SQLExecDirectW)")
+[SQL: INSERT INTO DHL_SCHEMA SELECT * FROM DHL_STAGING staging WHERE staging.ID NOT IN (SELECT ID FROM DHL_SCHEMA);]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+2024-06-24, 18:16:11 --- Error connecting to GAIA for review 88451258. [500]
+2024-06-24, 18:19:38 --- Error connecting to GAIA for review 1i0pnuemb2a6u001. [500]

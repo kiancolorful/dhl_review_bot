@@ -6,7 +6,7 @@ from utils import log
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
 SQL_SERVER_NAME = r"85.215.196.5" # IP: 85.215.196.5, Instance name: WIN-CIH1M1J41BG
 DATABASE = 'master'
-SQL_TABLE_NAME = 'DHL_SCHEMA'#'CC_DATA'
+SQL_TABLE_NAME = 'DHL_SCHEMA_HOTFIX'#'CC_DATA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
 USER = 'kian'
 PW = 'Gosling1'
@@ -15,8 +15,9 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "ID": "nvarchar(50)", 
     "Link": "nvarchar(255)", 
     "ReviewTitle": "nvarchar(255)", 
-    "ReviewOnlineChecked": "date", 
+    "RefreshDate": "date", 
     "ReviewDate": "date", 
+    "OnlineYesNo": "nvarchar(10)", 
     "OverallSatisfaction": "float", 
     "JobTitle": "nvarchar(50)",
     "Department": "nvarchar(50)", 
@@ -40,7 +41,8 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "IndividualityScore": "float", 
     "OverallScore": "float", 
     "WeightedScore": "float",
-    "DeveloperComment": "nvarchar(255)"
+    "DeveloperComment": "nvarchar(255)",
+    "last_modified": "nvarchar(255)"
 }
 
 def sql_insert_row(table_name, row, connection): 
