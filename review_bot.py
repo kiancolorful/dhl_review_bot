@@ -21,7 +21,7 @@ try:
     print("connecting to db...")
     con = engine.connect()
     if not con:
-        log("problem connecting to DB, exiting...")
+        log("problem connecting to DB, exiting...", __file__)
         exit()
     print("done")
     print("extracting new indeed reviews...")
@@ -72,4 +72,4 @@ try:
 
     print("finished, exiting...")
 except Exception as e:
-    log(e)
+    log(e, __file__)

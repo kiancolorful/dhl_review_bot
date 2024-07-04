@@ -7,6 +7,9 @@ import time
 START_DATE = "2024-05-01" # Format: YYYY-MM-DD
 END_DATE = "2024-05-31" # Format: YYYY-MM-DD
 
+# NOTE: For some reason, the reports come as a json.gz, which must be extracted. 
+# 7zip wasn't able to do this reliably in my testing, but Winrar worked very well. 
+
 url = "https://apihub.dhl.com/genai/reporting/queries"
 
 querystring = {"start":f"{START_DATE}T00:00:00Z","end":f"{END_DATE}T00:00:00Z"}

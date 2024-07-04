@@ -25,7 +25,7 @@ def supplement_kununu_data(row): # Supplements Department, Position, CurrentForm
     #response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={url}&dynamic=false")
     response = requests.get(url) # HOTFIX!!! TODO: REMOVE
     if(response.status_code < 200 or response.status_code > 299): # Bad request
-        log(f"Error connecting to Kununu through Scrapingdog. Row ID: {row.ID}, Status code: {response.status_code}")
+        log(f"Error connecting to Kununu through Scrapingdog. Row ID: {row.ID}, Status code: {response.status_code}", __file__)
         return
     soup = bs4.BeautifulSoup(response.text, "html.parser")
     try:
@@ -74,7 +74,7 @@ def extract_new_reviews(portal : str, since : datetime): # new version
             while(pagenum < MAX_WEX_CALLS):
                 response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/indeed?id=DHL&auth_token={WEXTRACTOR_AUTH_TOKEN}&offset={pagenum * 20}")
                 if(response.status_code < 200 or response.status_code > 299):
-                    log(f"Error connecting to Wextractor. Status code: {response.status_code}")
+                    log(f"Error connecting to Wextractor. Status code: {response.status_code}", __file__)
                     return
                 responsetext = response.text.replace("\n", " ")
                 responsetext = responsetext.replace("\r", "")
@@ -175,7 +175,7 @@ def extract_new_reviews(portal : str, since : datetime): # new version
             while(pagenum < MAX_WEX_CALLS):
                 response = requests.request("GET", f"https://wextractor.com/api/v1/reviews/kununu?auth_token={WEXTRACTOR_AUTH_TOKEN}&id=https://www.kununu.com/de/deutsche-post&offset={pagenum * 10}")
                 if(response.status_code < 200 or response.status_code > 299):
-                    log(f"Error connecting to Wextractor. Status code: {response.status_code}")
+                    log(f"Error connecting to Wextractor. Status code: {response.status_code}", __file__)
                     return
                 responsetext = response.text.replace("\n", " ")
                 responsetext = responsetext.replace("\r", "")
@@ -214,7 +214,7 @@ def extract_new_reviews(portal : str, since : datetime): # new version
                     list_of_dicts.append(row)
                 pagenum += 1
         case other:
-            log(f"Error extracting reviews from Wextractor, \"{portal}\" is not a supported portal.")
+            log(f"Error extracting reviews from Wextractor, \"{portal}\" is not a supported portal.", __file__)
             return None
     return pandas.DataFrame(list_of_dicts)
 

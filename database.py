@@ -14,7 +14,7 @@ OLD_REVIEW_REFRESH_COUNT = -1 # How many of the oldest reviews should be refresh
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
 SQL_SERVER_NAME = r"85.215.196.5" # IP: 85.215.196.5, Instance name: WIN-CIH1M1J41BG
 DATABASE = 'master'
-SQL_TABLE_NAME = 'DHL_SCHEMA'#'CC_DATA'
+SQL_TABLE_NAME = 'DHL_SCHEMA_HOTFIX'#'CC_DATA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
 USER = 'kian'
 PW = 'Gosling1'
@@ -51,7 +51,8 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "IndividualityScore": "float", 
     "OverallScore": "float", 
     "WeightedScore": "float",
-    "DeveloperComment": "nvarchar(255)"
+    "DeveloperComment": "nvarchar(255)",
+    "last_modified": "datetime"
 }
 
 def sql_insert_row(table_name, row, connection): 
@@ -91,7 +92,7 @@ def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame:
             df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (Response='' OR Response IS NULL)", engine)
         return df
     except pyodbc.Error as ex:
-        log(ex)
+        log(ex, __file__)
 
 def fetch_refresh_reviews(con) -> pandas.DataFrame:
     try:
@@ -109,4 +110,4 @@ def fetch_refresh_reviews(con) -> pandas.DataFrame:
         a = pandas.concat([df, df2, df3], ignore_index=True)
         return a 
     except Exception as ex:
-        log(ex)
+        log(ex, __file__)

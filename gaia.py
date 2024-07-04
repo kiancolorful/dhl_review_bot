@@ -154,7 +154,7 @@ def generate_responses(df : pandas.DataFrame):
         }
         response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
         if(response.status_code < 200 or response.status_code > 299):
-            log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]")
+            log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
             df.at[row.Index, "DeveloperComment"] = str(response.status_code)
             continue
         try:
@@ -165,7 +165,7 @@ def generate_responses(df : pandas.DataFrame):
             gaia_answer = json.loads(temp)
             gaia_answer = requests.structures.CaseInsensitiveDict(gaia_answer) # Sometimes GAIA messes up the casing of the keys
         except Exception as e:
-            log(e, "Error processing GAIA reply while evaluating response")
+            log(e, "Error processing GAIA reply while evaluating response", __file__)
             pass
 
         df.at[row.Index, "SensitiveTopic"] = gaia_answer["SensitiveTopic"]
