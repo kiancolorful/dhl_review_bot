@@ -42,7 +42,7 @@ ihrer Sorgen und eine positive, unterstützende Haltung zum Ausdruck bringen. Ac
 Ansprache und Verabschiedung zu verwenden, um Professionalität und Respekt gegenüber allen Kommentatoren 
 zu wahren. Dein Ziel ist es, eine offene, verständnisvolle und positive Kommunikation zu fördern, die 
 das Engagement und das Wohlbefinden der Mitarbeiter widerspiegelt, während du gleichzeitig das positive 
-Image von DHL als Arbeitgeber stärkst. Beenden Sie Ihre Antwort immer mit einer Signatur, zum Beispiel "Dein DHL Team".
+Image von DHL als Arbeitgeber stärkst. Beenden Sie Ihre Antwort immer mit einer Signatur.
 Bauen Sie zudem passend Zeilenumbrüche in Ihre Antwort ein.  
 
 Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_chat)}
@@ -154,7 +154,7 @@ def generate_responses(df : pandas.DataFrame):
         }
         response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
         if(response.status_code < 200 or response.status_code > 299):
-            log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]")
+            log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
             df.at[row.Index, "DeveloperComment"] = str(response.status_code)
             continue
         try:
@@ -165,7 +165,7 @@ def generate_responses(df : pandas.DataFrame):
             gaia_answer = json.loads(temp)
             gaia_answer = requests.structures.CaseInsensitiveDict(gaia_answer) # Sometimes GAIA messes up the casing of the keys
         except Exception as e:
-            log(e, "Error processing GAIA reply while evaluating response")
+            log(e, "Error processing GAIA reply while evaluating response", __file__)
             pass
 
         df.at[row.Index, "SensitiveTopic"] = gaia_answer["SensitiveTopic"]
@@ -177,9 +177,7 @@ def generate_responses(df : pandas.DataFrame):
         if(gaia_answer["Response"] == "" or ("(Leer)" in gaia_answer["Response"])):
             continue
 
-        print(str(row.Index) + str(row.ID))
         df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
-        #df.at[row.Index, "ResponseYesNo"] = "Yes"
         df.at[row.Index, "EstResponseDate"] = datetime.date.today()
         df.at[row.Index, "ResponseTimeDays"] = (datetime.date.today() - df.at[row.Index, "ReviewDate"]).days
         df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]
@@ -187,5 +185,5 @@ def generate_responses(df : pandas.DataFrame):
         df.at[row.Index, "EmpathyScore"] = gaia_answer["EmpathyScore"]
         df.at[row.Index, "HelpfulnessScore"] = gaia_answer["HelpfulnessScore"]
         df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
-        print(f"generated response for review {row.ID}")
+        print(f"({str(row.Index)}/{str(len(df.index))}) generated response for review {row.ID}")
     return df
