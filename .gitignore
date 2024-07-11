@@ -2,6 +2,7 @@ ms_sql_test.py
 __pycache__/
 old_swaggers/
 az_blob_test.py
+backups/*
 
 *.exe
 *.txt

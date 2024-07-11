@@ -222,6 +222,7 @@ def refresh_reviews(df : pandas.DataFrame, con):
     # look reviews up and update df
     for row in df.itertuples():
         #TODO response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={row.Link}&dynamic=false")
+        time.sleep(1)
         response = requests.get(row.Link)
         if(response.status_code < 200 or response.status_code > 299): # Bad request
             if(response.status_code == 404): # Review was taken offline
@@ -260,5 +261,9 @@ def refresh_reviews(df : pandas.DataFrame, con):
                     df.at[row.Index, "Response"] = resp.text
                 else:
                     df.at[row.Index, "ResponsePostedYesNo"] = "No"
+            case other:
+                log(f"Non-supported portal found while refreshing reviews. (ID = {row.ID})")
+        df.at[row.Index, "RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
+        df.at[row.Index, "OnlineYesNo"] = "Yes"
     # Return anyway
     return df
