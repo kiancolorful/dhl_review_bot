@@ -27,11 +27,7 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "ReviewTitle": "nvarchar(255)", 
     "RefreshDate": "date", 
     "ReviewDate": "date", 
-<<<<<<< HEAD
-    "OnlineYesNo": "nvarchar(10)", 
-=======
     "OnlineYesNo": "nvarchar(10)",
->>>>>>> main
     "OverallSatisfaction": "float", 
     "JobTitle": "nvarchar(50)",
     "Department": "nvarchar(50)", 
@@ -56,11 +52,7 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "OverallScore": "float", 
     "WeightedScore": "float",
     "DeveloperComment": "nvarchar(255)",
-<<<<<<< HEAD
-    "last_modified": "nvarchar(255)"
-=======
     "last_modified": "datetime"
->>>>>>> main
 }
 
 def sql_insert_row(table_name, row, connection): 
