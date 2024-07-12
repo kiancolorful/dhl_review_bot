@@ -169,7 +169,6 @@ def extract_new_reviews(portal : str, since : datetime): # new version
                     pagenum += 1 # Go to next page if all reviews on current page are new
             df = pandas.DataFrame(list_of_dicts)
             return df
-        # TODO: Add kununu
         case "kununu":
             pagenum = 0 
             while(pagenum < MAX_WEX_CALLS):

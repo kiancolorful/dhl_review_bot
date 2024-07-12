@@ -16,7 +16,6 @@ GAIA_HEADERS = {
     }
 
 json_template_chat = {
-    "Language": "",
     "ReviewTextEN": "",
 	"Response": "",
     "ResponseEN": "",
@@ -28,6 +27,21 @@ json_template_chat = {
 	"EmpathyScore": "",
 	"HelpfulnessScore": "", 
 	"IndividualityScore": ""
+}
+
+SYSTEM_MESSAGE_LANG = {
+    "role": "system",
+    "content": '''Determine the language in which the following text is written and give the language back as a two-letter response. 
+    If the text is written in German, your response will be 'DE'. 
+    If the text is written in English, your response will be 'EN'. 
+    If the text is written in Dutch, your response will be 'NL'. 
+    If the text is written in Italian, your response will be 'IT'. 
+    If the text is written in Spanish, your response will be 'ES'. 
+    If the text is written in French, your response will be 'FR'. 
+    If the text is written in Portuguese, your response will be 'PT'. 
+    If the text is written in another language, there is no text, or you cannot determine the language, you will determine th language based off of the location.
+    If there is no location and you still cannot determine the language, your response will be 'EN'.
+    '''
 }
 
 SYSTEM_MESSAGE = {
@@ -47,10 +61,9 @@ Bauen Sie zudem passend Zeilenumbrüche in Ihre Antwort ein.
 
 Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_chat)}
 
-Schreiben Sie die Sprache der Unternehmensbewertung ins Feld "Language".
-
-Die eigentliche Antwort auf die Unternehmensbewertung soll auf der selben Sprache sein, die Sie gerade ins Feld "Language" geschrieben haben.
 Die eigentliche Antwort auf die Unternehmensbewertung soll im Feld "Response" stehen. 
+Falls eine Sprache angegeben ist, sollen Sie Ihre eigentliche Antwort auf die Unternehmensbewertung in dieser Sprache schreiben.
+Sonst können Sie die Antwort auf Englisch schreiben. 
 
 Zusätzlich werden Sie die Empathie, Hilfsbereitschaft und Individualität Ihrer Antwort auf die Unternmehmensbewertung auf 
 einer Skala von 1 bis 5 Bewerten, wobei 5 die beste Note ist. Sie werden Ihre Bewertungen der Empathie, Hilfsbereitschaft 
@@ -130,18 +143,66 @@ Falls der Arbeitnehmer keinen Bewertungstext hinterlassen hat, werden Sie alle F
 '''
 } 
 
-def append_user_review(reviewtext : str, city : str=None) -> list: 
+def determine_lang(row) -> str:
+    user_message = {
+		"role": "user",
+		"content": row.ReviewText
+	}
+    if row.Location:
+        user_message['content'] += f"\n(Ort: {row.Location})"
+    
+    messages = [SYSTEM_MESSAGE_LANG, user_message]
+    
+    gaia_payload = {
+        "messages": messages, 
+        "max_tokens": 50, # Length of response
+        "temperature": 0, # Higher number = less deterministic
+        "top_p": 0.0, # Similar to temperature, don't use both
+        "n": 1, # Number of responses
+        #"stop": "",    # Stop sequence, e.g. STOP123
+        "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
+        "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
+    }
+    response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
+    if(response.status_code < 200 or response.status_code > 299):
+        log(f"Error connecting to GAIA for getting language of review {row.ID}. [{response.status_code}]", __file__)
+        df.at[row.Index, "DeveloperComment"] = str(response.status_code) + "(lang)"
+        return None
+    try:
+        lang = json.loads(response.text)['choices'][0]['message']['content']
+    except Exception as ex:
+        log(ex, __file__, "Could not extract language from GAIA response")
+        pass
+    if (lang.upper() in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]):
+        return lang
+    return None
+
+def generate_translations(lang_orig : str, reviewtext_orig : str, response_orig : str) -> list:
+    if(lang_orig == 'EN'):
+        return [reviewtext_orig, response_orig]
+    
+    
+def append_user_review(reviewtext : str, city : str=None, lang : str=None) -> list: 
     user_message = {
 		"role": "user",
 		"content": reviewtext
 	}
     if city:
         user_message['content'] += f"\n(Ort: {city})"
+    if lang:
+        user_message['content'] += f"\n(Sprache: {lang})"
     return [SYSTEM_MESSAGE, user_message]
     
 def generate_responses(df : pandas.DataFrame):
     for row in df.itertuples():
-        messages = append_user_review(row.ReviewText, row.Location)
+        # Determine language of reviewtext
+        lang = determine_lang(row)
+        if (not lang):
+            log(f"Language the came back from GAIA is not in our list. (lang: {str(lang)})", __file__)
+            continue
+        
+        # Generate response
+        messages = append_user_review(row.ReviewText, row.Location, lang)
         gaia_payload = {
             "messages": messages, 
 	        "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
@@ -176,14 +237,15 @@ def generate_responses(df : pandas.DataFrame):
         # If no review/response, move on to the next row
         if(gaia_answer["Response"] == "" or ("(Leer)" in gaia_answer["Response"])):
             continue
-
-        df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
-        df.at[row.Index, "EstResponseDate"] = datetime.date.today()
-        df.at[row.Index, "ResponseTimeDays"] = (datetime.date.today() - df.at[row.Index, "ReviewDate"]).days
-        df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]
-        df.at[row.Index, "MainAreaofImprovement"] = gaia_answer["MainAreaofImprovement"]
+        
+        if(df.at[row.Index, "Response"] == None or df.at[row.Index, "Response"] == ""):
+            df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
+            df.at[row.Index, "EstResponseDate"] = datetime.date.today()
+            df.at[row.Index, "ResponseTimeDays"] = (datetime.date.today() - df.at[row.Index, "ReviewDate"]).days
+            df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]
+            df.at[row.Index, "MainAreaofImprovement"] = gaia_answer["MainAreaofImprovement"]
         df.at[row.Index, "EmpathyScore"] = gaia_answer["EmpathyScore"]
         df.at[row.Index, "HelpfulnessScore"] = gaia_answer["HelpfulnessScore"]
         df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
-        print(f"({str(row.Index)}/{str(len(df.index))}) generated response for review {row.ID}")
+        print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated {lang} response for review {row.ID}")
     return df
