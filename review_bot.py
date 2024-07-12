@@ -55,7 +55,7 @@ try:
 
     print("pulling unanswered reviews from the past few days from database...")
     #unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
-    unanswered_reviews = pandas.read_sql(f"select top 5 * from DHL_SCHEMA where Portal='Indeed' and ReviewTextEN IS NULL and ResponseEN IS NULL order by ReviewDate asc", engine)
+    unanswered_reviews = pandas.read_sql(f"select top 4 * from DHL_SCHEMA where Portal='Indeed' and ReviewTextEN IS NULL and ResponseEN IS NULL and Response IS NOT NULL order by ReviewDate desc", engine)
     print("done")
     
     f = open("df.txt", "w") # Overwrite
@@ -71,8 +71,15 @@ try:
 
     gaia.generate_translations(unanswered_reviews)
 
+
+    # DELETE TODO
+    f = open("df.txt", "a")
+    f.write("\n\n\n" + unanswered_reviews.to_string())
+    f.close()
+
+
     print("updating database entries to include answers and gaia data...")
-    #database.put_df_in_sql(unanswered_reviews, con, True, True)
+    database.put_df_in_sql(unanswered_reviews, con, True, True)
     print("done")
 
     # NOTE: Refreshing reviews

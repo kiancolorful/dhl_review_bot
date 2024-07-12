@@ -15,7 +15,7 @@ GAIA_HEADERS = {
             "api-key": API_KEY
     }
 
-json_template_chat = {
+json_template_resp = {
     "ReviewTextEN": "",
 	"Response": "",
     "ResponseEN": "",
@@ -27,6 +27,11 @@ json_template_chat = {
 	"EmpathyScore": "",
 	"HelpfulnessScore": "", 
 	"IndividualityScore": ""
+}
+
+SYSTEM_MESSAGE_TRANSLATION = {
+    "role": "system",
+    "content": "Translate the following text into English."
 }
 
 SYSTEM_MESSAGE_LANG = {
@@ -59,7 +64,7 @@ das Engagement und das Wohlbefinden der Mitarbeiter widerspiegelt, während du g
 Image von DHL als Arbeitgeber stärkst. Beenden Sie Ihre Antwort immer mit einer Signatur.
 Bauen Sie zudem passend Zeilenumbrüche in Ihre Antwort ein.  
 
-Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_chat)}
+Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_resp)}
 
 Die eigentliche Antwort auf die Unternehmensbewertung soll im Feld "Response" stehen. 
 Falls eine Sprache angegeben ist, sollen Sie Ihre eigentliche Antwort auf die Unternehmensbewertung in dieser Sprache schreiben.
@@ -175,12 +180,7 @@ def determine_lang(row) -> str:
         pass
     if (lang.upper() in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]):
         return lang
-    return None
-
-def generate_translations(lang_orig : str, reviewtext_orig : str, response_orig : str) -> list:
-    if(lang_orig == 'EN'):
-        return [reviewtext_orig, response_orig]
-    
+    return None    
     
 def append_user_review(reviewtext : str, city : str=None, lang : str=None) -> list: 
     user_message = {
@@ -249,3 +249,49 @@ def generate_responses(df : pandas.DataFrame):
         df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
         print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated {lang} response for review {row.ID}")
     return df
+
+def generate_translations(df : pandas.DataFrame) -> list:
+    for row in df.itertuples():
+        # Determine language
+        lang_orig = determine_lang(row) # NOTE: determine_lang only uses the ReviewText to determine the language
+        if(lang_orig == 'EN'): # Already English
+            df.at[row.Index, "ReviewTextEN"] = row.ReviewText
+            df.at[row.Index, "ResponseEN"] = row.Response
+            continue
+        if(lang_orig == None): # Failure
+            df.at[row.Index, "ReviewTextEN"] = None
+            df.at[row.Index, "ResponseEN"] = None
+            continue
+        
+        # Needs to be translated
+        fields = { # This tuple-dict is the easiest way I found to write the code cleanly
+            ("ReviewTextEN", row.ReviewText),
+            ("ResponseEN", row.Response)
+        }
+        for tup in fields:
+            user_message = {
+                "role": "user",
+                "content": tup[1]
+            }
+            gaia_payload = {
+                "messages": [SYSTEM_MESSAGE_TRANSLATION, user_message], 
+                "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
+                "temperature": 1, # Higher number = less deterministic
+                "top_p": 0.0, # Similar to temperature, don't use both
+                "n": 1, # Number of responses
+                #"stop": "",    # Stop sequence, e.g. STOP123
+                "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
+                "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
+            }
+            response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
+            if(response.status_code < 200 or response.status_code > 299):
+                log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
+                df.at[row.Index, "DeveloperComment"] = str(response.status_code) + "(tr)"
+                continue
+            try:
+                result = json.loads(response.text)['choices'][0]['message']['content']
+            except Exception as ex:
+                log(e, "Error processing GAIA reply while translating.", __file__)
+                continue
+            df.at[row.Index, tup[0]] = result
+            
