@@ -60,8 +60,7 @@ try:
 
     # NOTE: GAIA
     print("pulling unanswered reviews from the past few days from database...")
-    #unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
-    unanswered_reviews = pandas.read_sql(f"select top 4 * from DHL_SCHEMA where Portal='Indeed' and ReviewTextEN IS NULL and ResponseEN IS NULL and Response IS NOT NULL order by ReviewDate desc", engine)
+    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
     print("done")
     
     f = open("df.txt", "w") # Overwrite
