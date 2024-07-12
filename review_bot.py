@@ -31,66 +31,67 @@ try:
     print("done")
     
     # NOTE: Scraping reviews
-    
-    # print("extracting new indeed reviews...")
-    # new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
-    # print("done")
-    # print("putting indeed reviews into database...")
-    # database.put_df_in_sql(new_reviews_indeed, con)
-    # print("done")
-    # print("extracting new glassdoor reviews...")
-    # new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
-    # print("done")
-    # print("putting glassdoor reviews into database...")
-    # database.put_df_in_sql(new_reviews_glassdoor, con)
-    # print("done")
-    # print("extracting new kununu reviews...")
-    # new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
-    # print("done")
-    # print("putting kununu reviews into database...")
-    # database.put_df_in_sql(new_reviews_kununu, con)
-    # print("done")
+    print("extracting new indeed reviews...")
+    new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
+    print("done")
+    print("putting indeed reviews into database...")
+    database.put_df_in_sql(new_reviews_indeed, con)
+    print("done")
+    print("extracting new glassdoor reviews...")
+    new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
+    print("done")
+    print("putting glassdoor reviews into database...")
+    database.put_df_in_sql(new_reviews_glassdoor, con)
+    print("done")
+    print("extracting new kununu reviews...")
+    new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
+    print("done")
+    print("putting kununu reviews into database...")
+    database.put_df_in_sql(new_reviews_kununu, con)
+    print("done")
 
     # NOTE: GAIA
-
     print("pulling unanswered reviews from the past few days from database...")
-    #unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
-    unanswered_reviews = pandas.read_sql(f"select top 4 * from DHL_SCHEMA where Portal='Indeed' and ReviewTextEN IS NULL and ResponseEN IS NULL and Response IS NOT NULL order by ReviewDate desc", engine)
+    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
     print("done")
     
     f = open("df.txt", "w") # Overwrite
     f.write(unanswered_reviews.to_string())
     f.close()
 
-    # print("generating response and gaia data for unanswered reviews...")
-    # gaia.generate_responses(unanswered_reviews)
-    # f = open("df.txt", "a")
-    # f.write("\n\n\n" + unanswered_reviews.to_string())
-    # f.close()
-    # print("done")
-
-    gaia.generate_translations(unanswered_reviews)
-
-
-    # DELETE TODO
+    print("generating response and gaia data for unanswered reviews...")
+    gaia.generate_responses(unanswered_reviews)
+    f = open("df.txt", "a")
+    f.write("\n\n\n" + unanswered_reviews.to_string())
+    f.close()
+    print("done")
+    print("updating database entries to include answers and gaia data...")
+    database.put_df_in_sql(unanswered_reviews, con, True, True)
+    print("done")
+    
     f = open("df.txt", "a")
     f.write("\n\n\n" + unanswered_reviews.to_string())
     f.close()
 
-
-    print("updating database entries to include answers and gaia data...")
-    database.put_df_in_sql(unanswered_reviews, con, True, True)
-    print("done")
-
     # NOTE: Refreshing reviews
-
-    # print("checking if older reviews have been removed from platforms or otherwise updated...")
-    # refresh = database.fetch_refresh_reviews(con)
-    # scraping.refresh_reviews(refresh, con)
-    # print("done")
-    # print("updating database")
-    # database.put_df_in_sql(refresh, con, False, True)
-    # print("done")
+    print("checking if older reviews have been removed from platforms or otherwise updated...")
+    refresh = database.fetch_refresh_reviews(con)
+    scraping.refresh_reviews(refresh, con)
+    print("done")
+    print("updating database")
+    database.put_df_in_sql(refresh, con, False, True)
+    print("done")
+    
+    # NOTE: Generating translations
+    print("fetching reviews to be translated into english...")
+    to_translate = database.fetch_translate_reviews(con, 10)
+    print("done")
+    print("generating translations...")
+    gaia.generate_translations(to_translate)
+    print("done")
+    print("inserting review translations back into database...")
+    database.put_df_in_sql(to_translate, con, True, True)
+    print("done")
 
     print("finished, exiting...")
 except Exception as e:
