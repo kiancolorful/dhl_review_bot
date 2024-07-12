@@ -1,0 +1,5 @@
+2024-07-12, 12:27:40 --- name 'unanswered_reviews' is not defined	(c:\Users\KianGosling\OneDrive - Colorful Chairs GmbH\Desktop\dhl_review_bot\review_bot.py)
+2024-07-12, 14:19:38 --- Error connecting to GAIA for review 1i14iik33ielb802. [500]	(C:\Users\KianGosling\OneDrive - Colorful Chairs GmbH\Desktop\dhl_review_bot\gaia.py)
+2024-07-12, 14:40:17 --- Error connecting to GAIA for review 1hsivkg3pi9a4800. [500]	(C:\Users\KianGosling\OneDrive - Colorful Chairs GmbH\Desktop\dhl_review_bot\gaia.py)
+2024-07-12, 14:41:21 --- Error connecting to GAIA for review 1hsj4j1hsj6f2801. [500]	(C:\Users\KianGosling\OneDrive - Colorful Chairs GmbH\Desktop\dhl_review_bot\gaia.py)
+2024-07-12, 14:44:54 --- Error connecting to GAIA for review 1hsivkg3pi9a4800. [500]	(C:\Users\KianGosling\OneDrive - Colorful Chairs GmbH\Desktop\dhl_review_bot\gaia.py)
