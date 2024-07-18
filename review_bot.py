@@ -52,7 +52,7 @@ try:
 
     # NOTE: GAIA
     print("pulling unanswered reviews from the past few days from database...")
-    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(54))
+    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
     print("done")
     
     f = open("df.txt", "w") # Overwrite
