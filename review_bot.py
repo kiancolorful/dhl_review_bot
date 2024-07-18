@@ -31,28 +31,28 @@ try:
     print("done")
     
     # NOTE: Scraping reviews
-    # print("extracting new indeed reviews...")
-    # new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
-    # print("done")
-    # print("putting indeed reviews into database...")
-    # database.put_df_in_sql(new_reviews_indeed, con)
-    # print("done")
-    # print("extracting new glassdoor reviews...")
-    # new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
-    # print("done")
-    # print("putting glassdoor reviews into database...")
-    # database.put_df_in_sql(new_reviews_glassdoor, con)
-    # print("done")
-    # print("extracting new kununu reviews...")
-    # new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
-    # print("done")
-    # print("putting kununu reviews into database...")
-    # database.put_df_in_sql(new_reviews_kununu, con)
-    # print("done")
+    print("extracting new indeed reviews...")
+    new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
+    print("done")
+    print("putting indeed reviews into database...")
+    database.put_df_in_sql(new_reviews_indeed, con)
+    print("done")
+    print("extracting new glassdoor reviews...")
+    new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
+    print("done")
+    print("putting glassdoor reviews into database...")
+    database.put_df_in_sql(new_reviews_glassdoor, con)
+    print("done")
+    print("extracting new kununu reviews...")
+    new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
+    print("done")
+    print("putting kununu reviews into database...")
+    database.put_df_in_sql(new_reviews_kununu, con)
+    print("done")
 
     # NOTE: GAIA
     print("pulling unanswered reviews from the past few days from database...")
-    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(54))
+    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
     print("done")
     
     f = open("df.txt", "w") # Overwrite
@@ -72,7 +72,7 @@ try:
     f = open("df.txt", "a")
     f.write("\n\n\n" + unanswered_reviews.to_string())
     f.close()
-    exit() #
+
     # NOTE: Refreshing reviews
     print("checking if older reviews have been removed from platforms or otherwise updated...")
     refresh = database.fetch_refresh_reviews(con)

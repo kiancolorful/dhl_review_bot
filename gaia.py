@@ -201,10 +201,10 @@ Falls der Arbeitnehmer keinen Bewertungstext hinterlassen hat, werden Sie alle F
 def determine_lang(row):
     user_message = {
 		"role": "user",
-		"content": row.ReviewText
+		"content": "Title: " + row.ReviewTitle + "\nText: " + row.ReviewText
 	}
-    if row.Location:
-        user_message['content'] += f"\n(Ort: {row.Location})"
+    # if row.Location:
+    #     user_message['content'] += f"\n(Ort: {row.Location})"
     
     messages = [SYSTEM_MESSAGE_LANG, user_message]
     
@@ -303,12 +303,12 @@ def generate_responses(df : pandas.DataFrame):
 def generate_translations(df : pandas.DataFrame):
     for row in df.itertuples():
         # Determine language
-        lang_orig = determine_lang(row) # NOTE: determine_lang only uses the ReviewText to determine the language
+        lang_orig = determine_lang(row)
         if(lang_orig == 'EN'): # Already English
             df.at[row.Index, "ReviewTextEN"] = row.ReviewText
             df.at[row.Index, "ResponseEN"] = row.Response
             continue
-        if(lang_orig == None): # Failure
+        if(isinstance(lang_orig, int)): # Failure
             df.at[row.Index, "ReviewTextEN"] = None
             df.at[row.Index, "ResponseEN"] = None
             continue
@@ -344,4 +344,4 @@ def generate_translations(df : pandas.DataFrame):
                 log(e, "Error processing GAIA reply while translating.", __file__)
                 continue
             df.at[row.Index, tup[0]] = result
-            print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")
+        print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")
