@@ -93,6 +93,16 @@ def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame:
         return df
     except pyodbc.Error as ex:
         log(ex, __file__)
+        
+def fetch_incomplete_reviews(engine, since=False) -> pandas.DataFrame: # These reviews were answered on kununu before the bot got to them. The goal of this is to fill out the extra information columns for these. 
+    try:
+        if since:
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE NOT (Response='' OR Response IS NULL) AND SensitiveTopic IS NULL AND ReviewDate>='{since.strftime('%Y-%m-%d')}'", engine)
+        else:
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE NOT (Response='' OR Response IS NULL) AND SensitiveTopic IS NULL", engine)
+        return df
+    except pyodbc.Error as ex:
+        log(ex, __file__)
 
 def fetch_refresh_reviews(con) -> pandas.DataFrame:
     try:

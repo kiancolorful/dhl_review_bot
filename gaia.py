@@ -15,6 +15,17 @@ GAIA_HEADERS = {
             "api-key": API_KEY
     }
 
+json_template_complete = {
+	"StateRegion": "",
+	"Country": "",
+	"MainPositiveAspect": "", 
+	"MainAreaOfImprovement": "", 
+	"SensitiveTopic": "", 
+	"EmpathyScore": "",
+	"HelpfulnessScore": "", 
+	"IndividualityScore": ""
+}
+
 json_template_resp = {
 	"Response": "",
 	"StateRegion": "",
@@ -25,6 +36,69 @@ json_template_resp = {
 	"EmpathyScore": "",
 	"HelpfulnessScore": "", 
 	"IndividualityScore": ""
+}
+
+SYSTEM_MESSAGE_COMPLETE = {
+    "role": "system",
+    "content": f'''Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_resp)}
+
+Die eigentliche Antwort auf die Unternehmensbewertung soll im Feld "Response" stehen. 
+Falls eine Sprache angegeben ist, sollen Sie Ihre eigentliche Antwort auf die Unternehmensbewertung in dieser Sprache schreiben.
+Sonst können Sie die Antwort auf Englisch schreiben. 
+
+Zusätzlich werden Sie die Empathie, Hilfsbereitschaft und Individualität Ihrer Antwort auf die Unternmehmensbewertung auf 
+einer Skala von 1 bis 5 Bewerten, wobei 5 die beste Note ist. 
+
+Falls ein Ort angegeben ist, werden Sie auch die Region (bzw. das Bundesland) und das Land, in denen sich dieser Ort befindet, bestimmen und in Ihrer Antwort zurückgeben. 
+
+Falls es sich in der Bewertung um ein sensibles Thema handelt (z.B. Rassismus, Sexismus, Beleidigung, Belästigung, usw.), werden Sie im Feld "SensitiveTopic" "Yes" eintragen, sonst "No".
+
+Als letztes werden Sie aus der Unternehmensbewertung herauslesen, welche Eigenschaft des Jobs der Arbeitnehmer besonders gut findet, und welche er 
+oder sie besonders schlecht findet. Wählen Sie aus den folgenden Listen positiver und negativer Eigenschaften jeweils die passendste Kategorie. 
+Falls keine Kategorie zutrifft, sollen Sie die Kategorie "Uncategorized" wählen.
+Schreiben Sie Ihre gewählten Eigenschaften jeweils in die Felder "MainPositiveAspect" und "MainAreaOfImprovement".
+
+Clusters for positive aspects:
+- Career advancement
+- Company in general
+- Good / stable job
+- Superiors
+- Positive atmosphere
+- Regular salary
+- Colleagues
+- Big company benefits
+- Fair / good salary
+- No stress
+- Trust / autonomous work
+- Professional development
+- Flexibility / Work-life balance
+- Collaboration
+- Uncategorized
+- Good organization
+- Transparency
+- Communication
+
+Clusters for negative aspects:
+- Poor Salary
+- Hard work / workload
+- Uncategorized
+- Boring tasks
+- Old office / working place
+- Big company disadvantages
+- Intransparency
+- Bad organization
+- Contract / working conditions
+- Company in general
+- Old equipment / vehicles
+- Flexibility / Work-life balance
+- Colleagues
+- Not enough manpower
+- Career advancement
+- Superiors
+- Professional development
+- Communication
+
+Falls der Arbeitnehmer keinen Bewertungstext hinterlassen hat, werden Sie alle Felder außer "State/Region", "Country" und "SensitiveTopic" mit "" ausgefüllt.'''
 }
 
 SYSTEM_MESSAGE_TRANSLATION = {
@@ -226,7 +300,7 @@ def generate_responses(df : pandas.DataFrame):
         print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated {lang} response for review {row.ID}")
     return df
 
-def generate_translations(df : pandas.DataFrame) -> list:
+def generate_translations(df : pandas.DataFrame):
     for row in df.itertuples():
         # Determine language
         lang_orig = determine_lang(row) # NOTE: determine_lang only uses the ReviewText to determine the language
@@ -271,4 +345,3 @@ def generate_translations(df : pandas.DataFrame) -> list:
                 continue
             df.at[row.Index, tup[0]] = result
             print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")
-            
