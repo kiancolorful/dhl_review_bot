@@ -16,9 +16,7 @@ GAIA_HEADERS = {
     }
 
 json_template_resp = {
-    "ReviewTextEN": "",
 	"Response": "",
-    "ResponseEN": "",
 	"StateRegion": "",
 	"Country": "",
 	"MainPositiveAspect": "", 
@@ -45,7 +43,7 @@ SYSTEM_MESSAGE_LANG = {
     If the text is written in French, your response will be 'FR'. 
     If the text is written in Portuguese, your response will be 'PT'. 
     If the text is written in another language, there is no text, or you cannot determine the language, you will determine th language based off of the location.
-    If there is no location and you still cannot determine the language, your response will be 'EN'.
+    If there is no location and you still cannot determine the language, your response will be 'Other'.
     '''
 }
 
@@ -71,29 +69,7 @@ Falls eine Sprache angegeben ist, sollen Sie Ihre eigentliche Antwort auf die Un
 Sonst können Sie die Antwort auf Englisch schreiben. 
 
 Zusätzlich werden Sie die Empathie, Hilfsbereitschaft und Individualität Ihrer Antwort auf die Unternmehmensbewertung auf 
-einer Skala von 1 bis 5 Bewerten, wobei 5 die beste Note ist. Sie werden Ihre Bewertungen der Empathie, Hilfsbereitschaft 
-und Individualität an folgenden Kriterien orientieren:
-
-Empathie: 
-- 1 Punkt: keine Antwort überhaupt ODER Text lautet „(Leer)“ ODER sehr unhöfliche Antwort
-- 2 Punkte: sehr kurze Antwort ohne Grußformel
-- 3 Punkte: neutrale (unpersönliche) aber dennoch konstruktive Antwort
-- 4 Punkte: freundliche Grußformel und freundliche Antwort, mit deutlichem Signal des Verständnisses für das Problem
-- 5 Punkte: Bestfall, empathische und persönliche Antwort mit perfektem Verständnis des Problems, falls notwendig mit Entschuldigungen
-
-Hilfsbereitschaft
-- 1 Punkt: keine Antwort überhaupt ODER Text lautet „(Leer)“ ODER Antwort ohne jeglichen Bezug zu den Schmerzpunkten des Mitarbeiters
-- 2 Punkte: automatisierte oder unpersönliche Antwort mit geringem Bezug zu den Schmerzpunkten des Mitarbeiters
-- 3 Punkte: individuelle Antwort mit geringem Maß an Engagement
-- 4 Punkte: individuelle Antwort mit allgemeinem Engagement, eine Lösung für die Schmerzpunkte des Mitarbeiters zu finden
-- 5 Punkte: individuelle Antwort mit einer oder mehreren spezifischen Lösungen für die Schmerzpunkte des Mitarbeiters oder klarer Verpflichtung zu realen Verbesserungen
-
-Individualität:
-- 1 Punkt: keine Antwort überhaupt ODER Antwort lautet „(Leer)“ ODER die Antwort wurde bereits für eine andere Bewertung verwendet und ohne Änderungen kopiert
-- 2 Punkte: die Antwort enthält 5 oder mehr standardisierte Bausteine
-- 3 Punkte: die Antwort enthält 3 oder 4 der standardisierten Bausteine, sie ist sinnvoll, aber ziemlich allgemein
-- 4 Punkte: die Antwort enthält maximal 2 der standardisierten Bausteine und enthält wenig, aber klare Bezüge zur Bewertung
-- 5 Punkte: für die Antwort wurde maximal 1 der standardisierten Bausteine verwendet und der Rest der Antwort ist um die Bewertung des Mitarbeiters herum aufgebaut
+einer Skala von 1 bis 5 Bewerten, wobei 5 die beste Note ist. 
 
 Falls ein Ort angegeben ist, werden Sie auch die Region (bzw. das Bundesland) und das Land, in denen sich dieser Ort befindet, bestimmen und in Ihrer Antwort zurückgeben. 
 
@@ -148,7 +124,7 @@ Falls der Arbeitnehmer keinen Bewertungstext hinterlassen hat, werden Sie alle F
 '''
 } 
 
-def determine_lang(row) -> str:
+def determine_lang(row):
     user_message = {
 		"role": "user",
 		"content": row.ReviewText
@@ -172,37 +148,37 @@ def determine_lang(row) -> str:
     if(response.status_code < 200 or response.status_code > 299):
         log(f"Error connecting to GAIA for getting language of review {row.ID}. [{response.status_code}]", __file__)
         df.at[row.Index, "DeveloperComment"] = str(response.status_code) + "(lang)"
-        return None
+        return response.status_code
     try:
         lang = json.loads(response.text)['choices'][0]['message']['content']
     except Exception as ex:
         log(ex, __file__, "Could not extract language from GAIA response")
         pass
-    if (lang.upper() in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]):
-        return lang
-    return None    
+    return lang 
     
-def append_user_review(reviewtext : str, city : str=None, lang : str=None) -> list: 
+def append_user_review(row, lang : str=None) -> list: 
     user_message = {
 		"role": "user",
-		"content": reviewtext
+		"content": f"Bewertungstitel: {row.ReviewTitle}\n\n{row.ReviewText}"
 	}
-    if city:
-        user_message['content'] += f"\n(Ort: {city})"
+    user_message['content'] += f"\n\n(Bewertung insgesamt: {row.OverallSatisfaction}/5.0)"
+    if row.Location:
+        user_message['content'] += f"\n\n(Ort: {row.Location})"
     if lang:
-        user_message['content'] += f"\n(Sprache: {lang})"
+        user_message['content'] += f"\n\n(Sprache: {lang})"
     return [SYSTEM_MESSAGE, user_message]
     
 def generate_responses(df : pandas.DataFrame):
     for row in df.itertuples():
         # Determine language of reviewtext
         lang = determine_lang(row)
-        if (not lang):
-            log(f"Language the came back from GAIA is not in our list. (lang: {str(lang)})", __file__)
+        if (isinstance(lang, int)): # Request gave an error
             continue
+        if (lang.upper() not in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]): # Respond in English if language is not in core 7
+            lang = "EN"
         
         # Generate response
-        messages = append_user_review(row.ReviewText, row.Location, lang)
+        messages = append_user_review(row, lang)
         gaia_payload = {
             "messages": messages, 
 	        "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
@@ -224,7 +200,7 @@ def generate_responses(df : pandas.DataFrame):
             temp = temp.split("}")[0]
             temp = "{" + temp + "}"
             gaia_answer = json.loads(temp)
-            gaia_answer = requests.structures.CaseInsensitiveDict(gaia_answer) # Sometimes GAIA messes up the casing of the keys
+            gaia_answer = requests.structures.CaseInsensitiveDict(gaia_answer) # Sometimes GAIA messes up the case of the dictionary keys
         except Exception as e:
             log(e, "Error processing GAIA reply while evaluating response", __file__)
             pass
