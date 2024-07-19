@@ -58,6 +58,25 @@ try:
     database.put_df_in_sql(new_reviews_kununu, con)
     print("done")
 
+    # NOTE: Refreshing reviews
+    print("checking if older reviews have been removed from platforms or otherwise updated...")
+    refresh = database.fetch_refresh_reviews(con)
+    scraping.refresh_reviews(refresh, con)
+    print("done")
+    print("updating database")
+    database.put_df_in_sql(refresh, con, False, True)
+    print("done")
+    
+    # NOTE: Completing kununu reviews
+    print("pulling reviews with incomplete information from database...")
+    incomplete_rows = database.fetch_incomplete_rows(con, 5)
+    print("done")
+    print("generating missing data with gaia...")
+    gaia.complete_rows(incomplete_rows)
+    print("done")
+    print("updating reviews...")
+    database.put_df_in_sql(incomplete_rows, con, False, True)
+        
     # NOTE: GAIA
     print("pulling unanswered reviews from the past few days from database...")
     unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
@@ -74,25 +93,16 @@ try:
     f.close()
     print("done")
     print("updating database entries to include answers and gaia data...")
-    database.put_df_in_sql(unanswered_reviews, con, True, True)
+    database.put_df_in_sql(unanswered_reviews, con, False, True)
     print("done")
     
     f = open("df.txt", "a")
     f.write("\n\n\n" + unanswered_reviews.to_string())
     f.close()
 
-    # NOTE: Refreshing reviews
-    print("checking if older reviews have been removed from platforms or otherwise updated...")
-    refresh = database.fetch_refresh_reviews(con)
-    scraping.refresh_reviews(refresh, con)
-    print("done")
-    print("updating database")
-    database.put_df_in_sql(refresh, con, False, True)
-    print("done")
-    
     # NOTE: Generating translations
     print("fetching reviews to be translated into english...")
-    to_translate = database.fetch_translate_reviews(con, 10)
+    to_translate = database.fetch_translate_reviews(con, 50)
     print("done")
     print("generating translations...")
     gaia.generate_translations(to_translate)
@@ -100,12 +110,6 @@ try:
     print("inserting review translations back into database...")
     database.put_df_in_sql(to_translate, con, True, True)
     print("done")
-
-    # NOTE: Generating review completions (Missing GAIA data for reviews that were answered manually before the Python script got to them)
-    print("fetching incomplete rows from database...")
-    incomplete_rows = database.fetch_incomplete_reviews(con)
-    print("done")
-    print("completing rows...")
     
     print("done")
 
