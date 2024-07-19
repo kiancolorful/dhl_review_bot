@@ -64,17 +64,7 @@ try:
     incomplete = database.fetch_incomplete_reviews(con, 5)
     print("done")
     print("generating missing data with gaia...")
-    
-    f = open("df.txt", "w") # Overwrite
-    f.write(incomplete.to_string())
-    f.close()
-    
     gaia.process_incomplete_reviews(incomplete)
-    
-    f = open("df.txt", "a")
-    f.write("\n\n\n" + incomplete.to_string())
-    f.close()
-    
     print("done")
     print("updating reviews...")
     database.put_df_in_sql(incomplete, con, False, True)
