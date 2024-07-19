@@ -12,15 +12,23 @@ from utils import log
     # Steps: 
     #   1. Get new reviews from Wextractor
     #   2. Put these reviews into the SQL Database (staging, then main)
-    #   3. Repeat for each portal
+    #   3. Repeat Steps 1 & 2 for each portal
     #   4. Pull unanswered reviews from SQL Database (most likely only recent ones)
-    #   5. Feed these in GAIA one by one
+    #   5. Feed these into GAIA one by one
+    #       a. Determine language of review
+    #       b. Generate response in this language
     #   6. Upload GAIA responses to database
+    #   7. Review refreshing
+    #       a. Select some reviews from the database that are a bit older
+    #       b. Check if they are still online, updating the DB if they aren't
+    #   8. Review/Response translation
+    #       a. Fetch 10 reviews from DB with no translation
+    #       b. If they are not in English already, generate an English translation of the review text and the response
+    #       c. If they are already in English, use the original texts as the EN translations
 
 try:
     
     # NOTE: Init 
-    
     print("start")
     engine = sqlalchemy.create_engine(f"mssql+pyodbc://{database.USER}:{database.PW}@{database.SQL_SERVER_NAME}/{database.DATABASE}?driver={database.MSSQL_DRIVER}")
     print("connecting to db...")
