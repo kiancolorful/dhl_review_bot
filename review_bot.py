@@ -5,7 +5,7 @@ import database
 import posting 
 import scraping
 import pandas
-from utils import log
+from utils import log, backup
 
 # Main
 
@@ -101,6 +101,11 @@ try:
     database.put_df_in_sql(to_translate, con, True, True)
     print("done")
 
+    # NOTE: Backup
+    print("generating backup csv")
+    backup(con, database.SQL_TABLE_NAME)
+    print("done")
+    
     print("finished, exiting...")
 except Exception as e:
     log(e, __file__)
