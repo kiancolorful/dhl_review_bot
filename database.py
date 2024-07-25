@@ -117,7 +117,8 @@ def fetch_refresh_reviews(con) -> pandas.DataFrame:
             df_old = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE RefreshDate=(SELECT MIN(RefreshDate) from {SQL_TABLE_NAME}) AND (OnlineYesNo='Yes' OR OnlineYesNo IS NULL)", con)
         else:
             df_old = pandas.read_sql(f"SELECT TOP {OLD_REVIEW_REFRESH_COUNT} * FROM {SQL_TABLE_NAME} ORDER BY RefreshDate ASC", con)
-        df_all = pandas.concat([df_new, df_sen, df_old], ignore_index=True)
+        df_list = [df_new, df_sen, df_old]
+        df_all = pandas.concat([frame for frame in df_list if not frame.empty], ignore_index=True) # Remove empty dfs (previous behavior deprecated)
         return df_all 
     except Exception as ex:
         log(ex, __file__)
