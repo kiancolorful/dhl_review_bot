@@ -39,24 +39,24 @@ try:
     print("done")
     
     # NOTE: Scraping reviews
-    print("extracting new indeed reviews...")
-    new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
-    print("done")
-    print("putting indeed reviews into database...")
-    database.put_df_in_sql(new_reviews_indeed, con)
-    print("done")
-    print("extracting new glassdoor reviews...")
-    new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
-    print("done")
-    print("putting glassdoor reviews into database...")
-    database.put_df_in_sql(new_reviews_glassdoor, con)
-    print("done")
-    print("extracting new kununu reviews...")
-    new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
-    print("done")
-    print("putting kununu reviews into database...")
-    database.put_df_in_sql(new_reviews_kununu, con)
-    print("done")
+    # print("extracting new indeed reviews...")
+    # new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
+    # print("done")
+    # print("putting indeed reviews into database...")
+    # database.put_df_in_sql(new_reviews_indeed, con)
+    # print("done")
+    # print("extracting new glassdoor reviews...")
+    # new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
+    # print("done")
+    # print("putting glassdoor reviews into database...")
+    # database.put_df_in_sql(new_reviews_glassdoor, con)
+    # print("done")
+    # print("extracting new kununu reviews...")
+    # new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
+    # print("done")
+    # print("putting kununu reviews into database...")
+    # database.put_df_in_sql(new_reviews_kununu, con)
+    # print("done")
 
     # NOTE: Refreshing reviews
     print("checking if older reviews have been removed from platforms or otherwise updated...")
@@ -77,7 +77,7 @@ try:
     print("updating reviews...")
     database.put_df_in_sql(incomplete_rows, con, False, True)
         
-    # NOTE: GAIA
+    # NOTE: Generating responses
     print("pulling unanswered reviews from the past few days from database...")
     unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
     print("done")
@@ -102,7 +102,7 @@ try:
 
     # NOTE: Generating translations
     print("fetching reviews to be translated into english...")
-    to_translate = database.fetch_translate_reviews(con, 50)
+    to_translate = database.fetch_translate_reviews(con, 10)
     print("done")
     print("generating translations...")
     gaia.generate_translations(to_translate)

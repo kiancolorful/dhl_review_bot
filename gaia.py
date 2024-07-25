@@ -2,6 +2,7 @@ import pandas
 import requests
 import json
 import datetime
+import time
 from utils import log
 
 GAIA_DEPLOYMENT_ID = "gpt-4-1106" #"gpt-35-turbo-0301"
@@ -14,6 +15,8 @@ GAIA_HEADERS = {
             "content-type": "application/json",
             "api-key": API_KEY
     }
+
+DELAY_429 = 60
 
 json_template_incomplete = {
 	"StateRegion": "",
@@ -214,10 +217,13 @@ def determine_lang(row):
         "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
         "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
     }
-    response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
+    response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
+    if(response.status_code == 429): # Too many requests
+                print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
+                time.sleep(DELAY_429)
+                response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
     if(response.status_code < 200 or response.status_code > 299):
         log(f"Error connecting to GAIA for getting language of review {row.ID}. [{response.status_code}]", __file__)
-        df.at[row.Index, "DeveloperComment"] = str(response.status_code) + "(lang)"
         return response.status_code
     try:
         lang = json.loads(response.text)['choices'][0]['message']['content']
@@ -242,6 +248,10 @@ def generate_responses(df : pandas.DataFrame):
     for row in df.itertuples():
         # Determine language of reviewtext
         lang = determine_lang(row)
+        if(lang == 429): # Too many requests
+                print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
+                time.sleep(DELAY_429)
+                lang = determine_lang(row)
         if (isinstance(lang, int)): # Request gave an error
             continue
         if (lang.upper() not in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]): # Respond in English if language is not in core 7
@@ -259,7 +269,11 @@ def generate_responses(df : pandas.DataFrame):
 	        "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
 	        "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
         }
-        response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
+        response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
+        if(response.status_code == 429):
+                print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
+                time.sleep(DELAY_429)
+                response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
         if(response.status_code < 200 or response.status_code > 299):
             log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
             df.at[row.Index, "DeveloperComment"] = str(response.status_code)
@@ -333,7 +347,11 @@ def generate_translations(df : pandas.DataFrame):
                 "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
                 "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
             }
-            response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
+            response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
+            if(response.status_code == 429): # Too many requests, waiting and trying again
+                print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
+                time.sleep(DELAY_429)
+                response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
             if(response.status_code < 200 or response.status_code > 299):
                 log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
                 df.at[row.Index, "DeveloperComment"] = str(response.status_code) + "(tr)"
@@ -368,7 +386,11 @@ def complete_rows(df : pandas.DataFrame):
         }
         
         # Request 
-        response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
+        response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
+        if(response.status_code == 429): # Too many requests, waiting and trying again
+                print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
+                time.sleep(DELAY_429)
+                response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)  
         if(response.status_code < 200 or response.status_code > 299):
             log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
             df.at[row.Index, "DeveloperComment"] = str(response.status_code)

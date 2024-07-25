@@ -264,5 +264,6 @@ def refresh_reviews(df : pandas.DataFrame, con):
                 log(f"Non-supported portal found while refreshing reviews. (ID = {row.ID})")
         df.at[row.Index, "RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
         df.at[row.Index, "OnlineYesNo"] = "Yes"
+    print(f"({str(row.Index + 1)}/{str(len(df.index))})\trefreshed review {row.ID}")
     # Return anyway
     return df
