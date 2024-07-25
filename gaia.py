@@ -38,7 +38,7 @@ json_template_resp = {
 	"IndividualityScore": ""
 }
 
-SYSTEM_MESSAGE_COMPLETE = {
+SYSTEM_MESSAGE_COMPLETE = { # 'complete'/'incomplete' refers to the prompt for completing incomplete reviews (reviews where a response was posted before the bot/GAIA got to it, so there is no additional iformation from GAIA (Country, Scores, etc.))
     "role": "system",
     "content": f'''Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_resp)}
 

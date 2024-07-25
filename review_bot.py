@@ -101,6 +101,14 @@ try:
     database.put_df_in_sql(to_translate, con, True, True)
     print("done")
 
+    # NOTE: Generating review completions (Missing GAIA data for reviews that were answered manually before the Python script got to them)
+    print("fetching incomplete rows from database...")
+    incomplete_rows = database.fetch_incomplete_reviews(con)
+    print("done")
+    print("completing rows...")
+    
+    print("done")
+
     # NOTE: Backup
     print("generating backup csv")
     backup(con, database.SQL_TABLE_NAME)
