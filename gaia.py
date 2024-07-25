@@ -15,7 +15,7 @@ GAIA_HEADERS = {
             "api-key": API_KEY
     }
 
-json_template_complete = {
+json_template_incomplete = {
 	"StateRegion": "",
 	"Country": "",
 	"MainPositiveAspect": "", 
@@ -38,25 +38,14 @@ json_template_resp = {
 	"IndividualityScore": ""
 }
 
-SYSTEM_MESSAGE_COMPLETE = {
+SYSTEM_MESSAGE_INCOMPLETE = { # 'complete'/'incomplete' refers to the prompt for completing incomplete reviews (reviews where a response was posted before the bot/GAIA got to it, so there is no additional iformation from GAIA (Country, Scores, etc.))
     "role": "system",
-    "content": f'''Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_resp)}
-
-Die eigentliche Antwort auf die Unternehmensbewertung soll im Feld "Response" stehen. 
-Falls eine Sprache angegeben ist, sollen Sie Ihre eigentliche Antwort auf die Unternehmensbewertung in dieser Sprache schreiben.
-Sonst können Sie die Antwort auf Englisch schreiben. 
-
-Zusätzlich werden Sie die Empathie, Hilfsbereitschaft und Individualität Ihrer Antwort auf die Unternmehmensbewertung auf 
-einer Skala von 1 bis 5 Bewerten, wobei 5 die beste Note ist. 
-
-Falls ein Ort angegeben ist, werden Sie auch die Region (bzw. das Bundesland) und das Land, in denen sich dieser Ort befindet, bestimmen und in Ihrer Antwort zurückgeben. 
-
-Falls es sich in der Bewertung um ein sensibles Thema handelt (z.B. Rassismus, Sexismus, Beleidigung, Belästigung, usw.), werden Sie im Feld "SensitiveTopic" "Yes" eintragen, sonst "No".
-
-Als letztes werden Sie aus der Unternehmensbewertung herauslesen, welche Eigenschaft des Jobs der Arbeitnehmer besonders gut findet, und welche er 
+    "content": f'''Sie bekommen zwei nachrichten. Die erste beinhaltet eine Unternehmensbewertung der Firma DHL, und die zweite beinhaltet DHLs Antwort auf diese Unternehmensbewertung.
+    Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_incomplete)}
+    Sie werden aus der Unternehmensbewertung herauslesen, welche Eigenschaft des Jobs der Arbeitnehmer besonders gut findet, und welche er 
 oder sie besonders schlecht findet. Wählen Sie aus den folgenden Listen positiver und negativer Eigenschaften jeweils die passendste Kategorie. 
-Falls keine Kategorie zutrifft, sollen Sie die Kategorie "Uncategorized" wählen.
-Schreiben Sie Ihre gewählten Eigenschaften jeweils in die Felder "MainPositiveAspect" und "MainAreaOfImprovement".
+Falls keine Kategorie zutrifft, werden Sie die Kategorie "Uncategorized" wählen. Falls der Arbeitnehmer keine Eigenschaft des Jobs als besonders positiv oder begativ empfindet, werden 
+Sie auch die Kategorie "Uncategorized" wählen. Schreiben Sie Ihre gewählten Eigenschaften jeweils in die Felder "MainPositiveAspect" und "MainAreaOfImprovement".
 
 Clusters for positive aspects:
 - Career advancement
@@ -97,8 +86,15 @@ Clusters for negative aspects:
 - Superiors
 - Professional development
 - Communication
+    
+Zusätzlich werden Sie die Empathie, Hilfsbereitschaft und Individualität von DHLs Antwort auf die Unternmehmensbewertung auf 
+einer Skala von 1 bis 5 Bewerten, wobei 5 die beste Note ist. Diese Punkte werden Sie jeweils in den Feldern "EmpathyScore", "HelpfulnessScore" und "IndividualityScore" eintragen.
+Ein hoher IndividualityScore würde zum Beispiel passen, wenn die Antwort auf die spezifischen Anliegen oder Eigenschaften des Arbeitsnehmers eingeht.
 
-Falls der Arbeitnehmer keinen Bewertungstext hinterlassen hat, werden Sie alle Felder außer "State/Region", "Country" und "SensitiveTopic" mit "" ausgefüllt.'''
+Falls in der Unternehmensbewertung ein Ort angegeben ist, werden Sie auch die Region (bzw. das Bundesland) und das Land, in denen sich dieser Ort befindet, bestimmen und in Ihrer Antwort zurückgeben. 
+
+Falls es sich in der Unternehemnsbewertung um ein sensibles Thema handelt (z.B. Rassismus, Sexismus, Beleidigung, Belästigung, usw.), werden Sie im Feld "SensitiveTopic" "Yes" eintragen, sonst "No".
+'''
 }
 
 SYSTEM_MESSAGE_TRANSLATION = {
@@ -133,8 +129,8 @@ ihrer Sorgen und eine positive, unterstützende Haltung zum Ausdruck bringen. Ac
 Ansprache und Verabschiedung zu verwenden, um Professionalität und Respekt gegenüber allen Kommentatoren 
 zu wahren. Dein Ziel ist es, eine offene, verständnisvolle und positive Kommunikation zu fördern, die 
 das Engagement und das Wohlbefinden der Mitarbeiter widerspiegelt, während du gleichzeitig das positive 
-Image von DHL als Arbeitgeber stärkst. Beenden Sie Ihre Antwort immer mit einer Signatur.
-Bauen Sie zudem passend Zeilenumbrüche in Ihre Antwort ein.  
+Image von DHL als Arbeitgeber stärkst. Beenden Sie Ihre Antwort immer mit einer Signatur, und bauen Sie 
+zudem passend Zeilenumbrüche in Ihre Antwort ein.  
 
 Sie werden Ihre Antwort in Form eines JSON-Objekts zurückgeben. Das Format soll folgendermaßen aussehen: {json.dumps(json_template_resp)}
 
@@ -194,7 +190,7 @@ Clusters for negative aspects:
 - Professional development
 - Communication
 
-Falls der Arbeitnehmer keinen Bewertungstext hinterlassen hat, werden Sie alle Felder außer "State/Region", "Country" und "SensitiveTopic" mit "" ausgefüllt.
+Falls der Arbeitnehmer keinen Bewertungstext hinterlassen hat, werden Sie alle Felder außer "State/Region", "Country" und "SensitiveTopic" mit "" ausfüllen.
 '''
 } 
 
@@ -278,26 +274,131 @@ def generate_responses(df : pandas.DataFrame):
         except Exception as e:
             log(e, "Error processing GAIA reply while evaluating response", __file__)
             pass
+        try: 
+            df.at[row.Index, "SensitiveTopic"] = gaia_answer["SensitiveTopic"]
+            if row.Location:
+                df.at[row.Index, "StateRegion"] = gaia_answer["StateRegion"]
+                df.at[row.Index, "Country"] = gaia_answer["Country"]
 
-        df.at[row.Index, "SensitiveTopic"] = gaia_answer["SensitiveTopic"]
-        if row.Location:
-            df.at[row.Index, "StateRegion"] = gaia_answer["StateRegion"]
-            df.at[row.Index, "Country"] = gaia_answer["Country"]
+            # If no review/response, move on to the next row
+            if(gaia_answer["Response"] == "" or ("(Leer)" in gaia_answer["Response"])):
+                continue
+            
+            if(df.at[row.Index, "Response"] == None or df.at[row.Index, "Response"] == ""):
+                df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
+                df.at[row.Index, "EstResponseDate"] = datetime.date.today()
+                df.at[row.Index, "ResponseTimeDays"] = (datetime.date.today() - df.at[row.Index, "ReviewDate"]).days
+                df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]
+                df.at[row.Index, "MainAreaofImprovement"] = gaia_answer["MainAreaofImprovement"]
+            df.at[row.Index, "EmpathyScore"] = gaia_answer["EmpathyScore"]
+            df.at[row.Index, "HelpfulnessScore"] = gaia_answer["HelpfulnessScore"]
+            df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
+        except Exception as ex:
+            log(ex, "Error filling GAIA JSON into DF, most likely KeyError", __file__)
+            pass
+        print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated {lang} response for review {row.ID}")
+    return df
 
-        # If no review/response, move on to the next row
-        if(gaia_answer["Response"] == "" or ("(Leer)" in gaia_answer["Response"])):
+def generate_translations(df : pandas.DataFrame):
+    for row in df.itertuples():
+        # Determine language
+        lang_orig = determine_lang(row)
+        if(lang_orig == 'EN'): # Already English
+            df.at[row.Index, "ReviewTextEN"] = row.ReviewText
+            df.at[row.Index, "ResponseEN"] = row.Response
+            print(f"({str(row.Index + 1)}/{str(len(df.index))})\t{row.ID} is already EN")
+            continue
+        if(isinstance(lang_orig, int)): # Failure
+            df.at[row.Index, "ReviewTextEN"] = None
+            df.at[row.Index, "ResponseEN"] = None
             continue
         
-        if(df.at[row.Index, "Response"] == None or df.at[row.Index, "Response"] == ""):
-            df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
-            df.at[row.Index, "EstResponseDate"] = datetime.date.today()
-            df.at[row.Index, "ResponseTimeDays"] = (datetime.date.today() - df.at[row.Index, "ReviewDate"]).days
+        # Needs to be translated
+        fields = { # This tuple-dict is the easiest way I found to write the code cleanly
+            ("ReviewTextEN", row.ReviewText),
+            ("ResponseEN", row.Response)
+        }
+        for tup in fields:
+            user_message = {
+                "role": "user",
+                "content": tup[1]
+            }
+            gaia_payload = {
+                "messages": [SYSTEM_MESSAGE_TRANSLATION, user_message], 
+                "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
+                "temperature": 1, # Higher number = less deterministic
+                "top_p": 0.0, # Similar to temperature, don't use both
+                "n": 1, # Number of responses
+                #"stop": "",    # Stop sequence, e.g. STOP123
+                "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
+                "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
+            }
+            response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
+            if(response.status_code < 200 or response.status_code > 299):
+                log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
+                df.at[row.Index, "DeveloperComment"] = str(response.status_code) + "(tr)"
+                continue
+            try:
+                result = json.loads(response.text)['choices'][0]['message']['content']
+            except Exception as ex:
+                log(e, "Error processing GAIA reply while translating.", __file__)
+                continue
+            df.at[row.Index, tup[0]] = result
+        print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")
+    return df
+
+def complete_rows(df : pandas.DataFrame):
+    for row in df.itertuples():
+        if(row.Response == None): # Do not process reviews with no response yet (shouldn't happen anyway, this is just a failsafe)
+            continue
+        
+        # Craft messages
+        messages = [SYSTEM_MESSAGE_INCOMPLETE, {"role": "user", "content": row.ReviewText}, {"role": "user", "content": row.Response}]
+        if(row.Location):
+            messages[1]["content"] += f"\n(Ort: {row.Location})"
+        gaia_payload = {
+            "messages": messages, 
+	        "max_tokens": 1000, # Length of response
+	        "temperature": 0, # Higher number = less deterministic
+	        "top_p": 0.0, # Similar to temperature, don't use both
+	        "n": 1, # Number of responses
+	        #"stop": "",    # Stop sequence, e.g. STOP123
+	        "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
+	        "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
+        }
+        
+        # Request 
+        response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
+        if(response.status_code < 200 or response.status_code > 299):
+            log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
+            df.at[row.Index, "DeveloperComment"] = str(response.status_code)
+            continue
+        try:
+            temp = json.loads(response.text)['choices'][0]['message']['content']
+            temp = temp.split("{")[1]
+            temp = temp.split("}")[0]
+            temp = "{" + temp + "}"
+            gaia_answer = json.loads(temp)
+            gaia_answer = requests.structures.CaseInsensitiveDict(gaia_answer) # Sometimes GAIA messes up the case of the dictionary keys
+        except Exception as ex:
+            log(ex, "Error processing GAIA reply while evaluating response", __file__)
+            pass
+        
+        # Entering data
+        try:
+            if row.Location:
+                df.at[row.Index, "StateRegion"] = gaia_answer["StateRegion"]
+                df.at[row.Index, "Country"] = gaia_answer["Country"]
+            df.at[row.Index, "SensitiveTopic"] = gaia_answer["SensitiveTopic"]
             df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]
             df.at[row.Index, "MainAreaofImprovement"] = gaia_answer["MainAreaofImprovement"]
-        df.at[row.Index, "EmpathyScore"] = gaia_answer["EmpathyScore"]
-        df.at[row.Index, "HelpfulnessScore"] = gaia_answer["HelpfulnessScore"]
-        df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
-        print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated {lang} response for review {row.ID}")
+            df.at[row.Index, "EmpathyScore"] = gaia_answer["EmpathyScore"]
+            df.at[row.Index, "HelpfulnessScore"] = gaia_answer["HelpfulnessScore"]
+            df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
+            print(f"({str(row.Index + 1)}/{str(len(df.index))})\tadded missing info for {row.ID}")
+        except Exception as ex:
+            log(ex, "Error filling GAIA JSON into DF, most likely KeyError", __file__)
+            pass
     return df
 
 def generate_translations(df : pandas.DataFrame):
