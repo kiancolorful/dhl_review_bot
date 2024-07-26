@@ -13,18 +13,23 @@ from utils import log, backup
     #   1. Get new reviews from Wextractor
     #   2. Put these reviews into the SQL Database (staging, then main)
     #   3. Repeat Steps 1 & 2 for each portal
-    #   4. Pull unanswered reviews from SQL Database (most likely only recent ones)
-    #   5. Feed these into GAIA one by one
-    #       a. Determine language of review
-    #       b. Generate response in this language
-    #   6. Upload GAIA responses to database
-    #   7. Review refreshing
+    #   4. Review refreshing
     #       a. Select some reviews from the database that are a bit older
     #       b. Check if they are still online, updating the DB if they aren't
-    #   8. Review/Response translation
+    #   5. Review completion
+    #       a. Determine which reviews have a response but no additional GAIA data (kununu reviews that were answered manually before the bot got to them)
+    #       b. Feed these into GAIA to generate the additional GAIA data
+    #   6. Pull unanswered reviews from SQL Database (most likely only recent ones)
+    #   7. Feed these into GAIA one by one
+    #       a. Determine language of review
+    #       b. Generate response in this language
+    #   8. Upload GAIA responses to database
+    #   9. Review/Response translation
     #       a. Fetch 10 reviews from DB with no translation
     #       b. If they are not in English already, generate an English translation of the review text and the response
     #       c. If they are already in English, use the original texts as the EN translations
+    #   10. Backup: save antire database as a CSV in "Backups" folder
+    # 11. Blob storage: send this CSV file to DHL's Azure blob storage
 
 try:
     
@@ -39,24 +44,24 @@ try:
     print("done")
     
     # NOTE: Scraping reviews
-    # print("extracting new indeed reviews...")
-    # new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
-    # print("done")
-    # print("putting indeed reviews into database...")
-    # database.put_df_in_sql(new_reviews_indeed, con)
-    # print("done")
-    # print("extracting new glassdoor reviews...")
-    # new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
-    # print("done")
-    # print("putting glassdoor reviews into database...")
-    # database.put_df_in_sql(new_reviews_glassdoor, con)
-    # print("done")
-    # print("extracting new kununu reviews...")
-    # new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
-    # print("done")
-    # print("putting kununu reviews into database...")
-    # database.put_df_in_sql(new_reviews_kununu, con)
-    # print("done")
+    print("extracting new indeed reviews...")
+    new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
+    print("done")
+    print("putting indeed reviews into database...")
+    database.put_df_in_sql(new_reviews_indeed, con)
+    print("done")
+    print("extracting new glassdoor reviews...")
+    new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
+    print("done")
+    print("putting glassdoor reviews into database...")
+    database.put_df_in_sql(new_reviews_glassdoor, con)
+    print("done")
+    print("extracting new kununu reviews...")
+    new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
+    print("done")
+    print("putting kununu reviews into database...")
+    database.put_df_in_sql(new_reviews_kununu, con)
+    print("done")
 
     # NOTE: Refreshing reviews
     print("checking if older reviews have been removed from platforms or otherwise updated...")
