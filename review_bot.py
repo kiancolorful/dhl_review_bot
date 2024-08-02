@@ -86,11 +86,9 @@ try:
     print("pulling unanswered reviews from the past few days from database...")
     unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
     print("done")
-    
     f = open("df.txt", "w") # Overwrite
     f.write(unanswered_reviews.to_string())
     f.close()
-
     print("generating response and gaia data for unanswered reviews...")
     gaia.generate_responses(unanswered_reviews)
     f = open("df.txt", "a")

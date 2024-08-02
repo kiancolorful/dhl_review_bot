@@ -115,7 +115,8 @@ SYSTEM_MESSAGE_LANG = {
     If the text is written in Spanish, your response will be 'ES'. 
     If the text is written in French, your response will be 'FR'. 
     If the text is written in Portuguese, your response will be 'PT'. 
-    If the text is written in another language, there is no text, or you cannot determine the language, you will determine th language based off of the location.
+    If the text is written in another language or you cannot determine the language, you will determine the language based off of the location.
+    If the review text contains rating labels such as "atmosphere rating: 5/5", you will not factor these rating labels into your decision.
     If there is no location and you still cannot determine the language, your response will be 'Other'.
     '''
 }
@@ -246,14 +247,19 @@ def append_user_review(row, lang : str=None) -> list:
     
 def generate_responses(df : pandas.DataFrame):
     for row in df.itertuples():
+        lang = row.Language
         # Determine language of reviewtext
-        lang = determine_lang(row)
-        if(lang == 429): # Too many requests
-                print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
-                time.sleep(DELAY_429)
-                lang = determine_lang(row)
-        if (isinstance(lang, int)): # Request gave an error
-            continue
+        if(lang == None):
+            lang = determine_lang(row)
+            if(lang == 429): # Too many requests
+                    print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
+                    time.sleep(DELAY_429)
+                    lang = determine_lang(row)
+            if (isinstance(lang, int)): # Request gave an error
+                continue
+            
+            # No more errors
+            df.at[row.Index, "Language"] = lang.upper()
         if (lang.upper() not in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]): # Respond in English if language is not in core 7
             lang = "EN"
         
@@ -285,8 +291,8 @@ def generate_responses(df : pandas.DataFrame):
             temp = "{" + temp + "}"
             gaia_answer = json.loads(temp)
             gaia_answer = requests.structures.CaseInsensitiveDict(gaia_answer) # Sometimes GAIA messes up the case of the dictionary keys
-        except Exception as e:
-            log(e, "Error processing GAIA reply while evaluating response", __file__)
+        except Exception as ex:
+            log(ex, "Error processing GAIA reply while evaluating response", __file__)
             pass
         try: 
             df.at[row.Index, "SensitiveTopic"] = gaia_answer["SensitiveTopic"]
@@ -304,6 +310,7 @@ def generate_responses(df : pandas.DataFrame):
                 df.at[row.Index, "ResponseTimeDays"] = (datetime.date.today() - df.at[row.Index, "ReviewDate"]).days
                 df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]
                 df.at[row.Index, "MainAreaofImprovement"] = gaia_answer["MainAreaofImprovement"]
+                df.at[row.Index, "ApprovalStatus"] = "Pending"
             df.at[row.Index, "EmpathyScore"] = gaia_answer["EmpathyScore"]
             df.at[row.Index, "HelpfulnessScore"] = gaia_answer["HelpfulnessScore"]
             df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
@@ -316,16 +323,18 @@ def generate_responses(df : pandas.DataFrame):
 def generate_translations(df : pandas.DataFrame):
     for row in df.itertuples():
         # Determine language
-        lang_orig = determine_lang(row)
-        if(lang_orig == 'EN'): # Already English
-            df.at[row.Index, "ReviewTextEN"] = row.ReviewText
-            df.at[row.Index, "ResponseEN"] = row.Response
-            print(f"({str(row.Index + 1)}/{str(len(df.index))})\t{row.ID} is already EN")
-            continue
-        if(isinstance(lang_orig, int)): # Failure
-            df.at[row.Index, "ReviewTextEN"] = None
-            df.at[row.Index, "ResponseEN"] = None
-            continue
+        lang_orig = row.Language
+        if(lang_orig == None):
+            lang_orig = determine_lang(row)
+            if(lang_orig == 'EN'): # Already English
+                df.at[row.Index, "ReviewTextEN"] = row.ReviewText
+                df.at[row.Index, "ResponseEN"] = row.Response
+                print(f"({str(row.Index + 1)}/{str(len(df.index))})\t{row.ID} is already EN")
+                continue
+            if(isinstance(lang_orig, int)): # Failure
+                df.at[row.Index, "ReviewTextEN"] = None
+                df.at[row.Index, "ResponseEN"] = None
+                continue
         
         # Needs to be translated
         fields = { # This tuple-dict is the easiest way I found to write the code cleanly

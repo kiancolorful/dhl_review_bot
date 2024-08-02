@@ -9,7 +9,7 @@ import re
 from utils import log
 
 # Wextractor info
-MAX_WEX_CALLS = 1
+MAX_WEX_CALLS = 2
 WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
 
 # Scrapingdog info
@@ -227,6 +227,8 @@ def refresh_reviews(df : pandas.DataFrame, con):
             if(response.status_code == 404): # Review was taken offline
                 df.at[row.Index, "OnlineYesNo"] = "No"
                 df.at[row.Index, "RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
+                print(f"({str(row.Index + 1)}/{str(len(df.index))})\trefreshed review {row.ID} (offline)")
+            print(f"({str(row.Index + 1)}/{str(len(df.index))})\tSomething weird happened. Code: {response.status_code}, ID: {row.ID}")
             continue
         soup = bs4.BeautifulSoup(response.text, "html.parser")
         match row.Portal.lower():
@@ -238,6 +240,7 @@ def refresh_reviews(df : pandas.DataFrame, con):
                     for br in resp.find_all("br"):
                         br.replace_with("\n")
                     df.at[row.Index, "Response"] = resp.text
+                    df.at[row.Index, "ApprovalStatus"] = "Approved"
                 else:
                     df.at[row.Index, "ResponsePostedYesNo"] = "No"
             case "glassdoor":
@@ -248,6 +251,7 @@ def refresh_reviews(df : pandas.DataFrame, con):
                     for br in resp.find_all("br"):
                         br.replace_with("\n")
                     df.at[row.Index, "Response"] = resp.text
+                    df.at[row.Index, "ApprovalStatus"] = "Approved"
                 else:
                     df.at[row.Index, "ResponsePostedYesNo"] = "No"
             case "kununu":
@@ -258,12 +262,13 @@ def refresh_reviews(df : pandas.DataFrame, con):
                     for br in resp.find_all("br"):
                         br.replace_with("\n")
                     df.at[row.Index, "Response"] = resp.text
+                    df.at[row.Index, "ApprovalStatus"] = "Approved"
                 else:
                     df.at[row.Index, "ResponsePostedYesNo"] = "No"
             case other:
                 log(f"Non-supported portal found while refreshing reviews. (ID = {row.ID})")
         df.at[row.Index, "RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
         df.at[row.Index, "OnlineYesNo"] = "Yes"
-    print(f"({str(row.Index + 1)}/{str(len(df.index))})\trefreshed review {row.ID}")
+        print(f"({str(row.Index + 1)}/{str(len(df.index))})\trefreshed review {row.ID}")
     # Return anyway
     return df
