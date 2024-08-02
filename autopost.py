@@ -46,7 +46,7 @@ print("done")
 
 # Get responses
 try:
-    df = pandas.read_sql(f"SELECT Link, Response FROM {SQL_TABLE_NAME} WHERE ResponsePostedYesNo='No'", con)
+    df = pandas.read_sql(f"SELECT Link, Response FROM {SQL_TABLE_NAME} WHERE ResponsePostedYesNo='No' AND OnlineYesNo='Yes' AND ApprovalStatus='Approved' OR ApprovalStatus='ApplyNewResponse'", con)
 except:
     print("Error connecting to database, exiting...")
     time.sleep(1)

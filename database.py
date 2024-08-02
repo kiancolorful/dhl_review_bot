@@ -36,14 +36,17 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "Location": "nvarchar(50)", 
     "StateRegion": "nvarchar(50)", 
     "Country": "nvarchar(50)", 
+    "Language": "nvarchar(10)",
     "ReviewText": "nvarchar(MAX)", 
     "ReviewTextEN": "nvarchar(MAX)", 
     "MainpositiveAspect": "nvarchar(255)", 
     "MainAreaofImprovement": "nvarchar(255)", 
     "SensitiveTopic": "nvarchar(10)", 
+    "ApprovalStatus": "nvarchar(30)",
     "ResponsePostedYesNo": "nvarchar(10)", 
     "Response": "nvarchar(MAX)", 
     "ResponseEN": "nvarchar(MAX)", 
+    "EditedResponse": "nvarchar(MAX)",
     "EstResponseDate": "date", 
     "ResponseTimeDays": "int", 
     "EmpathyScore": "float", 
@@ -87,9 +90,9 @@ def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new
 def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame: 
     try:
         if since:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (Response='' OR Response IS NULL) AND ReviewDate>='{since.strftime('%Y-%m-%d')}'", engine)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ((Response='' OR Response IS NULL) AND ReviewDate>='{since.strftime('%Y-%m-%d')}') OR ApprovalStatus='Regenerate'", engine)
         else:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (Response='' OR Response IS NULL)", engine)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (Response='' OR Response IS NULL) OR ApprovalStatus='Regenerate'", engine)
         return df
     except pyodbc.Error as ex:
         log(ex, __file__)
@@ -117,15 +120,17 @@ def fetch_refresh_reviews(con) -> pandas.DataFrame:
             df_old = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE RefreshDate=(SELECT MIN(RefreshDate) from {SQL_TABLE_NAME}) AND (OnlineYesNo='Yes' OR OnlineYesNo IS NULL)", con)
         else:
             df_old = pandas.read_sql(f"SELECT TOP {OLD_REVIEW_REFRESH_COUNT} * FROM {SQL_TABLE_NAME} ORDER BY RefreshDate ASC", con)
-        df_list = [df_new, df_sen, df_old]
-        df_all = pandas.concat([frame for frame in df_list if not frame.empty], ignore_index=True) # Remove empty dfs (previous behavior deprecated)
+        df_all = pandas.concat([df_new, df_sen, df_old], ignore_index=True) # Remove empty dfs (previous behavior deprecated)
         return df_all 
     except Exception as ex:
         log(ex, __file__)
         
-def fetch_translate_reviews(con, num : int) -> pandas.DataFrame:
+def fetch_translate_reviews(con, num : int=None) -> pandas.DataFrame:
     try:
-        df = pandas.read_sql(f"SELECT TOP {num} * FROM {SQL_TABLE_NAME} WHERE ReviewTextEN IS NULL AND ResponseEN IS NULL AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
+        if(num):
+            df = pandas.read_sql(f"SELECT TOP {num} * FROM {SQL_TABLE_NAME} WHERE ReviewTextEN IS NULL AND ResponseEN IS NULL AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
+        else:
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ReviewTextEN IS NULL AND ResponseEN IS NULL AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
         return df
     except Exception as ex:
         log(ex, __file__, "Error connecting to database while trying to translate reviews.")
