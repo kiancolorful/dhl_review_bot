@@ -94,7 +94,8 @@ Zusätzlich werden Sie die Empathie, Hilfsbereitschaft und Individualität von D
 einer Skala von 1 bis 5 Bewerten, wobei 5 die beste Note ist. Diese Punkte werden Sie jeweils in den Feldern "EmpathyScore", "HelpfulnessScore" und "IndividualityScore" eintragen.
 Ein hoher IndividualityScore würde zum Beispiel passen, wenn die Antwort auf die spezifischen Anliegen oder Eigenschaften des Arbeitsnehmers eingeht.
 
-Falls in der Unternehmensbewertung ein Ort angegeben ist, werden Sie auch die Region (bzw. das Bundesland) und das Land, in denen sich dieser Ort befindet, bestimmen und in Ihrer Antwort zurückgeben. 
+Falls in der Unternehmensbewertung ein Ort angegeben ist, werden Sie auch die Region (bzw. das Bundesland) und das Land, in denen sich dieser Ort befindet, bestimmen und in Ihrer Antwort zurückgeben.
+Die Namen des Ortes und der Region werden Sie auf Englisch zurückgeben.
 
 Falls es sich in der Unternehemnsbewertung um ein sensibles Thema handelt (z.B. Rassismus, Sexismus, Beleidigung, Belästigung, usw.), werden Sie im Feld "SensitiveTopic" "Yes" eintragen, sonst "No".
 '''
