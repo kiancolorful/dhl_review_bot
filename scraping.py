@@ -206,6 +206,7 @@ def extract_new_reviews(portal : str, since : datetime): # new version
                     row["Response"] = review['reply']['text']
                     if row["Response"]:
                         row["ResponsePostedYesNo"] = 'Yes'
+                        row["ApprovalStatus"] = 'Approved'
                     else:
                         row["ResponsePostedYesNo"] = "No"
                     row["EstResponseDate"] = None
@@ -220,6 +221,8 @@ def extract_new_reviews(portal : str, since : datetime): # new version
 def refresh_reviews(df : pandas.DataFrame, con):
     # look reviews up and update df
     for row in df.itertuples():
+        if(row.Portal != 'kununu'): # TODO: buy scrapingdog please and get rid of this
+            continue
         #TODO response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={row.Link}&dynamic=false")
         time.sleep(1)
         response = requests.get(row.Link)
