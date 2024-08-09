@@ -146,6 +146,7 @@ Zusätzlich werden Sie die Empathie, Hilfsbereitschaft und Individualität Ihrer
 einer Skala von 1 bis 5 Bewerten, wobei 5 die beste Note ist. 
 
 Falls ein Ort angegeben ist, werden Sie auch die Region (bzw. das Bundesland) und das Land, in denen sich dieser Ort befindet, bestimmen und in Ihrer Antwort zurückgeben. 
+Sie werden diese Namen auf Englisch zurückgeben. 
 
 Falls es sich in der Bewertung um ein sensibles Thema handelt (z.B. Rassismus, Sexismus, Beleidigung, Belästigung, usw.), werden Sie im Feld "SensitiveTopic" "Yes" eintragen, sonst "No".
 
