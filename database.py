@@ -14,7 +14,7 @@ OLD_REVIEW_REFRESH_COUNT = -1 # How many of the oldest reviews should be refresh
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
 SQL_SERVER_NAME = r"85.215.196.5" # IP: 85.215.196.5, Instance name: WIN-CIH1M1J41BG
 DATABASE = 'master'
-SQL_TABLE_NAME = 'DHL_SCHEMA'
+SQL_TABLE_NAME = 'TEST123'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
 USER = 'kian'
 PW = 'Gosling1'
@@ -57,14 +57,6 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "DeveloperComment": "nvarchar(255)",
     "last_modified": "datetime"
 }
-
-def sql_insert_row(table_name, row, connection): 
-    try:
-        row_dict = row.to_dict()
-        df = pandas.DataFrame([row_dict])
-        df.to_sql(name=table_name, con=connection, if_exists='append', index=False)
-    except Exception as e:
-        log(e, __file__, "Error inserting row into SQL table")
 
 def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new=True, update_existing=False): 
     # DEFAULT: ONLY INSERT NEW RECORDS, DON'T UPDATE
@@ -112,15 +104,15 @@ def fetch_refresh_reviews(con) -> pandas.DataFrame:
         # new reviews
         df_new = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ReviewDate='{(datetime.date.today() - datetime.timedelta(NEW_REVIEW_REFRESH_DELAY)).strftime('%Y-%m-%d')}' AND (OnlineYesNo IS NULL OR OnlineYesNo='Yes')", con)
         
-        #sensitive reviews
+        # sensitive reviews
         df_sen = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ReviewDate>='{(datetime.date.today() - datetime.timedelta(SENSITIVE_REVIEW_REFRESH_INTERVAL)).strftime('%Y-%m-%d')}' AND RefreshDate<='{(datetime.date.today() - datetime.timedelta(SENSITIVE_REVIEW_REFRESH_FREQUENCY)).strftime('%Y-%m-%d')}' AND SensitiveTopic='Yes' AND (OnlineYesNo IS NULL OR OnlineYesNo='Yes')", con)
         
-        #old reviews
+        # old reviews
         if(OLD_REVIEW_REFRESH_COUNT < 0): # Get all reviews that share the oldest RefreshDate
             df_old = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE RefreshDate=(SELECT MIN(RefreshDate) from {SQL_TABLE_NAME}) AND (OnlineYesNo='Yes' OR OnlineYesNo IS NULL)", con)
         else:
             df_old = pandas.read_sql(f"SELECT TOP {OLD_REVIEW_REFRESH_COUNT} * FROM {SQL_TABLE_NAME} ORDER BY RefreshDate ASC", con)
-        df_all = pandas.concat([df_new, df_sen, df_old], ignore_index=True) # Remove empty dfs (previous behavior deprecated)
+        df_all = pandas.concat([df_new, df_sen, df_old], ignore_index=True) # Remove empty dfs? (previous behavior deprecated)
         return df_all 
     except Exception as ex:
         log(ex, __file__)
