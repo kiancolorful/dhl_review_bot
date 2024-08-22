@@ -3,6 +3,7 @@ import requests
 import json
 import datetime
 import time
+import re
 from utils import log
 
 GAIA_DEPLOYMENT_ID = "gpt-4-1106" #"gpt-35-turbo-0301"
@@ -94,7 +95,8 @@ Zusätzlich werden Sie die Empathie, Hilfsbereitschaft und Individualität von D
 einer Skala von 1 bis 5 Bewerten, wobei 5 die beste Note ist. Diese Punkte werden Sie jeweils in den Feldern "EmpathyScore", "HelpfulnessScore" und "IndividualityScore" eintragen.
 Ein hoher IndividualityScore würde zum Beispiel passen, wenn die Antwort auf die spezifischen Anliegen oder Eigenschaften des Arbeitsnehmers eingeht.
 
-Falls in der Unternehmensbewertung ein Ort angegeben ist, werden Sie auch die Region (bzw. das Bundesland) und das Land, in denen sich dieser Ort befindet, bestimmen und in Ihrer Antwort zurückgeben. 
+Falls in der Unternehmensbewertung ein Ort angegeben ist, werden Sie auch die Region (bzw. das Bundesland) und das Land, in denen sich dieser Ort befindet, bestimmen und in Ihrer Antwort zurückgeben.
+Die Namen des Ortes und der Region werden Sie auf Englisch zurückgeben.
 
 Falls es sich in der Unternehemnsbewertung um ein sensibles Thema handelt (z.B. Rassismus, Sexismus, Beleidigung, Belästigung, usw.), werden Sie im Feld "SensitiveTopic" "Yes" eintragen, sonst "No".
 '''
@@ -199,13 +201,34 @@ Falls der Arbeitnehmer keinen Bewertungstext hinterlassen hat, werden Sie alle F
 '''
 } 
 
+def remove_english_labels(row) -> str: # This function removes the English labels that we add to review text for Indeed and Kununu, and returns the review text as a string (df and row are not affected). This helps with language detection.
+    match row.Portal.lower():
+        case 'indeed':
+            text = row.ReviewText
+            text.replace("Pros: ", "")
+            text.replace("Cons: ", "")
+            return text
+        case 'kununu':
+            text = row.ReviewText
+            re.sub('([^\s]+) rating: [1-5]\/5 ', '', text) # Remove star ratings
+            while('\n\n' in text):
+                text.replace('\n\n', '\n')
+            if text.equals('\n'):
+                return ''
+            return text
+        case other:
+            return row.ReviewText
+
 def determine_lang(row):
     user_message = {
 		"role": "user",
-		"content": "Title: " + row.ReviewTitle + "\nText: " + row.ReviewText
+		"content": "Title: " + row.ReviewTitle
 	}
-    # if row.Location:
-    #     user_message['content'] += f"\n(Ort: {row.Location})"
+    rt = remove_kununu_stars(row)
+    if (not (rt == None or rt == '')):
+        user_message['content'] += "\nText: " + rt
+    if row.Location:
+        user_message['content'] += f"\n(Location: {row.Location})"
     
     messages = [SYSTEM_MESSAGE_LANG, user_message]
     
@@ -261,8 +284,11 @@ def generate_responses(df : pandas.DataFrame):
             
             # No more errors
             df.at[row.Index, "Language"] = lang.upper()
-        if (lang.upper() not in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]): # Respond in English if language is not in core 7
-            lang = "EN"
+        if (lang.upper() not in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]): # Respond in English if language is not in core 7, or in German if Portal is kununu
+            if(row.Portal.lower() == 'kununu'):
+                lang = "DE"
+            else:
+                lang = "EN"
         
         # Generate response
         messages = append_user_review(row, lang)
@@ -432,3 +458,49 @@ def complete_rows(df : pandas.DataFrame):
             log(ex, "Error filling GAIA JSON into DF, most likely KeyError", __file__)
             pass
     return df
+
+def generate_translations(df : pandas.DataFrame):
+    for row in df.itertuples():
+        # Determine language
+        lang_orig = determine_lang(row)
+        if(lang_orig == 'EN'): # Already English
+            df.at[row.Index, "ReviewTextEN"] = row.ReviewText
+            df.at[row.Index, "ResponseEN"] = row.Response
+            continue
+        if(isinstance(lang_orig, int)): # Failure
+            df.at[row.Index, "ReviewTextEN"] = None
+            df.at[row.Index, "ResponseEN"] = None
+            continue
+        
+        # Needs to be translated
+        fields = { # This tuple-dict is the easiest way I found to write the code cleanly
+            ("ReviewTextEN", row.ReviewText),
+            ("ResponseEN", row.Response)
+        }
+        for tup in fields:
+            user_message = {
+                "role": "user",
+                "content": tup[1]
+            }
+            gaia_payload = {
+                "messages": [SYSTEM_MESSAGE_TRANSLATION, user_message], 
+                "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
+                "temperature": 1, # Higher number = less deterministic
+                "top_p": 0.0, # Similar to temperature, don't use both
+                "n": 1, # Number of responses
+                #"stop": "",    # Stop sequence, e.g. STOP123
+                "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
+                "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
+            }
+            response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
+            if(response.status_code < 200 or response.status_code > 299):
+                log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
+                df.at[row.Index, "DeveloperComment"] = str(response.status_code) + "(tr)"
+                continue
+            try:
+                result = json.loads(response.text)['choices'][0]['message']['content']
+            except Exception as ex:
+                log(e, "Error processing GAIA reply while translating.", __file__)
+                continue
+            df.at[row.Index, tup[0]] = result
+        print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")

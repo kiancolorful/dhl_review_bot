@@ -116,6 +116,18 @@ try:
     backup(con, database.SQL_TABLE_NAME)
     print("done")
     
+    # NOTE: Check for duplicates
+    print("checking for duplicates...")
+    dupes = pandas.read_sql("SELECT ID, COUNT(ID) FROM DHL_SCHEMA GROUP BY ID HAVING COUNT(ID) > 1")
+    if dupes:
+        if (not df.empty):
+            log("Dupes found, saving")
+            f = open("dupes.txt", "w") 
+            f.write(dupes.to_string())
+            f.write(f"\n\n Timestamp: {str((datetime.date.today()).strftime('%Y-%m-%d'))}")
+            f.close()
+    print("done")
+    
     print("finished, exiting...")
 except Exception as e:
     log(e, __file__)
