@@ -204,15 +204,13 @@ Falls der Arbeitnehmer keinen Bewertungstext hinterlassen hat, werden Sie alle F
 def remove_english_labels(row) -> str: # This function removes the English labels that we add to review text for Indeed and Kununu, and returns the review text as a string (df and row are not affected). This helps with language detection.
     match row.Portal.lower():
         case 'indeed':
-            text = row.ReviewText
-            text.replace("Pros: ", "")
-            text.replace("Cons: ", "")
+            text = (row.ReviewText).replace("Pros: ", "")
+            text = text.replace("Cons: ", "")
             return text
         case 'kununu':
-            text = row.ReviewText
-            re.sub('([^\s]+) rating: [1-5]\/5 ', '', text) # Remove star ratings
+            text = re.sub('([^\s]+) rating: [1-5]\/5 ', '', row.ReviewText) # Remove star ratings
             while('\n\n' in text):
-                text.replace('\n\n', '\n')
+                text = text.replace('\n\n', '\n')
             if text.equals('\n'):
                 return ''
             return text
@@ -300,8 +298,10 @@ def generate_responses(df : pandas.DataFrame):
 	        "n": 1, # Number of responses
 	        #"stop": "",    # Stop sequence, e.g. STOP123
 	        "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
-	        "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
+	        "frequency_penalty": 0, # [-2, 2]: Positive = don't repeat phrases verbatim
         }
+        if(row.ApprovalStatus == "Regenerate"):
+            gaia_payload["presence_penalty"] = 1 # TODO: Is this a good idea?
         response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
         if(response.status_code == 429):
                 print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
@@ -322,6 +322,11 @@ def generate_responses(df : pandas.DataFrame):
             log(ex, "Error processing GAIA reply while evaluating response", __file__)
             pass
         try: 
+            if(row.ApprovalStatus == "Regenerate"):
+                df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
+                df.at[row.Index, "ApprovalStatus"] = "Pending"
+                continue
+            
             df.at[row.Index, "SensitiveTopic"] = gaia_answer["SensitiveTopic"]
             if row.Location:
                 df.at[row.Index, "StateRegion"] = gaia_answer["StateRegion"]

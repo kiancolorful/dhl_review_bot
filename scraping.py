@@ -13,17 +13,20 @@ MAX_WEX_CALLS = 2
 WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
 
 # Scrapingdog info
-SCRAPINGDOG_API_KEY_KIAN = "65a943782f78003318229a41"
-SCRAPINGDOG_API_KEY_ELENA = "6619300786d2b244207115b9"
+SCRAPINGDOG_API_KEY = "66c72a43bf5a414c4fe14687"
+# SCRAPINGDOG_API_KEY_KIAN = "65a943782f78003318229a41"
+# SCRAPINGDOG_API_KEY_ELENA = "6619300786d2b244207115b9"
 
 
+# Wextractor gibt Datetimes als String zurück. Diese Funktion wandelt gibt die String als Datetime-Objekt zurück.
 def wex_string_to_datetime(str): 
     return datetime.datetime.strptime(str, "%Y-%m-%dT%H:%M:%S")
 
-def supplement_kununu_data(row): # Supplements Department, Position, CurrentFormerEmployee, ContractTerminationKununuOnly
+# Nicht alle benötigten Daten werden von Wextractor gesammelt. Diese Funktion scrapt Department, Position, 
+# CurrentFormerEmployee und ContractTerminationKununuOnly und fügt die Werte in die DateFrame ein 
+def supplement_kununu_data(row): 
     url = row["Link"]
-    #response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={url}&dynamic=false")
-    response = requests.get(url) # HOTFIX!!! TODO: REMOVE
+    response = requests.get(url) 
     if(response.status_code < 200 or response.status_code > 299): # Bad request
         log(f"Error connecting to Kununu through Scrapingdog. Row ID: {row.ID}, Status code: {response.status_code}", __file__)
         return
@@ -55,6 +58,7 @@ def supplement_kununu_data(row): # Supplements Department, Position, CurrentForm
     except: 
         print("Error parsing Kununu! Link: " + row["Link"])
 
+# kununu-Bewertungen enthalten nicht nur einen ReviewText, sondern auch Sternebewertungen. Diese Funktion gibt diese Sternebewertungen als String zurück.
 def append_kununu_scores(review):
     scores = "\n"
     for key in review:
@@ -66,6 +70,7 @@ def append_kununu_scores(review):
         scores = scores[2:]
     return scores
 
+# Diese Funktion nutzt Wextractor um für ein gegebenes Portal die neusten Reviews herunterzuladen. Der Parameter "since" setzt eine Untergrenze für das Alter der gesammelten Reviews. 
 def extract_new_reviews(portal : str, since : datetime): # new version
     list_of_dicts = []
     match portal.lower():
@@ -218,15 +223,19 @@ def extract_new_reviews(portal : str, since : datetime): # new version
             return None
     return pandas.DataFrame(list_of_dicts)
 
+# Diese Funktion schaut, ob Reviews noch online sind. Falls ja, wird anschließend der ResponseText nochmal gescrapt und in dem DataFrame aktualisiert. 
 def refresh_reviews(df : pandas.DataFrame, con):
     # look reviews up and update df
     for row in df.itertuples():
-        if(row.Portal != 'kununu'): # TODO: buy scrapingdog please and get rid of this
+        #time.sleep(1)
+        if(row.Portal == "kununu" or row.Portal == "Glassdoor"): # TODO: Once we have a paid scrapingdog license, send kununu traffic over scrapingdog as well
             continue
-        #TODO response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={row.Link}&dynamic=false")
-        time.sleep(1)
-        response = requests.get(row.Link)
-        if(response.status_code < 200 or response.status_code > 299): # Bad request
+            response = requests.get(row.Link)
+        else:
+            response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY}&url={row.Link}&dynamic=false")
+        if(response.status_code == 410): # retry
+            response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY}&url={row.Link}&dynamic=false")
+        if(response.status_code < 200 or response.status_code > 299): # Bad request TODO: Handle scraping dog error codes
             if(response.status_code == 404): # Review was taken offline
                 df.at[row.Index, "OnlineYesNo"] = "No"
                 df.at[row.Index, "RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
@@ -248,7 +257,7 @@ def refresh_reviews(df : pandas.DataFrame, con):
                     df.at[row.Index, "ResponsePostedYesNo"] = "No"
             case "glassdoor":
                 rev = soup.find(class_="review-details_reviewDetails__4N3am")
-                resp = rev.find(class_="review-details_isCollapsed__5mhq_ newEmployerResponseText px-std")
+                resp = rev.find('span', attrs={"data-test": "review-text-undefined"})
                 if resp:
                     df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
                     for br in resp.find_all("br"):
