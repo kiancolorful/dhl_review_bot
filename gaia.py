@@ -104,7 +104,7 @@ Falls es sich in der Unternehemnsbewertung um ein sensibles Thema handelt (z.B. 
 
 SYSTEM_MESSAGE_TRANSLATION = {
     "role": "system",
-    "content": "Translate the following text into English. If it is already in English, return the text without any modification."
+    "content": "Translate the following text into English. If it is already in English, you will return the text without any modification."
 }
 
 SYSTEM_MESSAGE_LANG = {
@@ -212,7 +212,7 @@ def remove_english_labels(row) -> str:
             text = re.sub('([^\s]+) rating: [1-5]\/5 ', '', row.ReviewText) # Remove star ratings
             while('\n\n' in text):
                 text = text.replace('\n\n', '\n')
-            if text.equals('\n'):
+            if text == '\n':
                 return ''
             return text
         case other:
@@ -373,15 +373,15 @@ def generate_translations(df : pandas.DataFrame):
         lang_orig = row.Language
         if(lang_orig == None):
             lang_orig = determine_lang(row)
-            if(lang_orig == 'EN'): # Already English
-                df.at[row.Index, "ReviewTextEN"] = row.ReviewText
-                df.at[row.Index, "ResponseEN"] = row.Response
-                print(f"({str(row.Index + 1)}/{str(len(df.index))})\t{row.ID} is already EN")
-                continue
-            if(isinstance(lang_orig, int)): # Failure
-                df.at[row.Index, "ReviewTextEN"] = None
-                df.at[row.Index, "ResponseEN"] = None
-                continue
+        if(lang_orig == 'EN'): # Already English
+            df.at[row.Index, "ReviewTextEN"] = row.ReviewText
+            df.at[row.Index, "ResponseEN"] = row.Response
+            print(f"({str(row.Index + 1)}/{str(len(df.index))})\t{row.ID} is already EN")
+            continue
+        if(isinstance(lang_orig, int)): # Failure
+            df.at[row.Index, "ReviewTextEN"] = None
+            df.at[row.Index, "ResponseEN"] = None
+            continue
         
         # Needs to be translated
         fields = { # This tuple-dict is the easiest way I found to write the code cleanly
@@ -390,8 +390,15 @@ def generate_translations(df : pandas.DataFrame):
         }
         for tup in fields:
             # Skip if there is already an EN version
-            if(tup[1] and tup[1] != ""):
-                continue
+            if(tup[0] == "ReviewTextEN"):
+                if(row.ReviewTextEN and row.ReviewTextEN != ""):
+                    continue
+                # If the kununu ReviewText is only the star ratings:
+                elif(remove_english_labels(row) == ''):
+                    df.at[row.Index, tup[0]] = row.ReviewText
+                    continue
+            elif(tup[0] == "ResponseEN" and (row.ResponseEN and row.ResponseEN != "")):
+                continue    
 
             user_message = {
                 "role": "user",
@@ -400,7 +407,7 @@ def generate_translations(df : pandas.DataFrame):
             gaia_payload = {
                 "messages": [SYSTEM_MESSAGE_TRANSLATION, user_message], 
                 "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
-                "temperature": 1, # Higher number = less deterministic # TODO should temperature be 1 here?
+                "temperature": 0, # Higher number = less deterministic # TODO should temperature be 0 here?
                 "top_p": 0.0, # Similar to temperature, don't use both
                 "n": 1, # Number of responses
                 #"stop": "",    # Stop sequence, e.g. STOP123
@@ -411,7 +418,7 @@ def generate_translations(df : pandas.DataFrame):
             # Generate translation and verify that generated translations are both english
             is_english = False
             tries = 3 # Max number of tries before giving up
-            while(not is_english or tries <= 0):
+            while(not is_english and tries > 0):
                 # Generate translation:
                 response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
                 if(response.status_code == 429): # Too many requests, waiting and trying again
@@ -429,16 +436,16 @@ def generate_translations(df : pandas.DataFrame):
                     continue
 
                 # Verify language:
-                lang = determine_lang(result, True)
-                if(lang.upper() == "EN"):
+                lang_translation = determine_lang(result, True)
+                if(lang_translation.upper() == "EN"):
                     is_english = True
                     df.at[row.Index, tup[0]] = result
                 else: 
                     tries -= 1 # Decrement number of tries
-        if(is_english):
-            print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")
-        else:
-            print(f"({str(row.Index + 1)}/{str(len(df.index))})\t failed to generate EN translation for review {row.ID}")
+            if(not is_english):
+                print(f"({str(row.Index + 1)}/{str(len(df.index))})\tfailed to generate {tup[0]} for review {row.ID}")
+                continue
+        print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")
     return df
 
 # This function completes missing data which is usually generated by GAIA, for instance in case a review is scraped from kununu that was already answered without manually without using anything from this program. 

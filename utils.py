@@ -28,11 +28,10 @@ def backup(con, tablename):
 def check_for_dupes(con):
     print("checking for duplicates...")
     dupes = pandas.read_sql("SELECT ID, COUNT(ID) FROM DHL_SCHEMA GROUP BY ID HAVING COUNT(ID) > 1", con)
-    if dupes:
-        if (not dupes.empty):
-            log("Dupes found, saving")
-            f = open("dupes.txt", "w") 
-            f.write(dupes.to_string())
-            f.write(f"\n\n Timestamp: {str((datetime.date.today()).strftime('%Y-%m-%d'))}")
-            f.close()
+    if (not dupes.empty):
+        log("Dupes found, saving")
+        f = open("dupes.txt", "w") 
+        f.write(dupes.to_string())
+        f.write(f"\n\n Timestamp: {str((datetime.date.today()).strftime('%Y-%m-%d'))}")
+        f.close()
     print("done")
