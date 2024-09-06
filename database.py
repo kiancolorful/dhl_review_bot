@@ -142,9 +142,9 @@ def fetch_regenerate_reviews(con, count : int=None) -> pandas.DataFrame:
 def fetch_translate_reviews(con, num : int=None) -> pandas.DataFrame:
     try:
         if(num):
-            df = pandas.read_sql(f"SELECT TOP {num} * FROM {SQL_TABLE_NAME} WHERE ReviewTextEN IS NULL AND ResponseEN IS NULL AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
+            df = pandas.read_sql(f"SELECT TOP {num} * FROM {SQL_TABLE_NAME} WHERE (ReviewTextEN IS NULL OR ResponseEN IS NULL) AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
         else:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ReviewTextEN IS NULL AND ResponseEN IS NULL AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (ReviewTextEN IS NULL OR ResponseEN IS NULL) AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
         return df
     except Exception as ex:
         log(ex, __file__, "Error connecting to database while trying to translate reviews.")

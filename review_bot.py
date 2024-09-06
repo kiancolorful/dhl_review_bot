@@ -9,21 +9,23 @@ from utils import log, backup, check_for_dupes
 # Main
 
     # Steps: 
-    #   1. Get new reviews from Wextractor
-    #   2. Put these reviews into the SQL Database (staging, then main)
-    #   3. Repeat Steps 1 & 2 for each portal
-    #   4. Pull unanswered reviews from SQL Database (most likely only recent ones)
-    #   5. Feed these into GAIA one by one
-    #       a. Determine language of review
-    #       b. Generate response in this language
-    #   6. Upload GAIA responses to database
-    #   7. Review refreshing
+    #   1. Initialize databse connection
+    #   2. Get new reviews from Wextractor for each portal 
+    #   3. Refresh a few reviews from the database (check if they are still online)
     #       a. Select some reviews from the database that are a bit older
     #       b. Check if they are still online, updating the DB if they aren't
+    #   4. If there are any kununu reviews that are missing some information, use GAIA to fill in this information
+    #   5. Pull unanswered reviews from SQL Database (most likely only recent ones), and feed them into GAIA one by one
+    #       a. Determine language of review
+    #       b. Generate response in this language
+    #   7. Regenerate responses that are marked by the DHL team as "regenerate"
     #   8. Review/Response translation
     #       a. Fetch 10 reviews from DB with no translation
     #       b. If they are not in English already, generate an English translation of the review text and the response
     #       c. If they are already in English, use the original texts as the EN translations
+    #   9. Create CSV backup of database
+    #   10. Check for duplicate entries in database
+    #   11. Close connection to database
 
 try:
     
@@ -126,6 +128,7 @@ try:
     check_for_dupes(con)
     
     print("finished, exiting...")
+    con.close()
 except Exception as e:
     # NOTE: Check for duplicates
     check_for_dupes(con)
