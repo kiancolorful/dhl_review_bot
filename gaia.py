@@ -370,7 +370,7 @@ def generate_translations(df : pandas.DataFrame):
             try:
                 result = json.loads(response.text)['choices'][0]['message']['content']
             except Exception as ex:
-                log(e, "Error processing GAIA reply while translating.", __file__)
+                log(ex, "Error processing GAIA reply while translating.", __file__)
                 continue
             df.at[row.Index, tup[0]] = result
         print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")
@@ -475,7 +475,7 @@ def generate_translations(df : pandas.DataFrame):
             try:
                 result = json.loads(response.text)['choices'][0]['message']['content']
             except Exception as ex:
-                log(e, "Error processing GAIA reply while translating.", __file__)
+                log(ex, "Error processing GAIA reply while translating.", __file__)
                 continue
             df.at[row.Index, tup[0]] = result
         print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")

@@ -44,24 +44,27 @@ try:
     print("done")
     
     # NOTE: Scraping reviews
-    print("extracting new indeed reviews...")
-    new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
-    print("done")
-    print("putting indeed reviews into database...")
-    database.put_df_in_sql(new_reviews_indeed, con)
-    print("done")
-    print("extracting new glassdoor reviews...")
-    new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
-    print("done")
-    print("putting glassdoor reviews into database...")
-    database.put_df_in_sql(new_reviews_glassdoor, con)
-    print("done")
-    print("extracting new kununu reviews...")
-    new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
-    print("done")
-    print("putting kununu reviews into database...")
-    database.put_df_in_sql(new_reviews_kununu, con)
-    print("done")
+    # print("extracting new indeed reviews...")
+    # new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
+    # new_reviews_indeed.drop_duplicates(subset=['ID'])
+    # print("done")
+    # print("putting indeed reviews into database...")
+    # database.put_df_in_sql(new_reviews_indeed, con)
+    # print("done")
+    # print("extracting new glassdoor reviews...")
+    # new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
+    # new_reviews_glassdoor.drop_duplicates(subset=['ID'])
+    # print("done")
+    # print("putting glassdoor reviews into database...")
+    # database.put_df_in_sql(new_reviews_glassdoor, con)
+    # print("done")
+    # print("extracting new kununu reviews...")
+    # new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
+    # new_reviews_kununu.drop_duplicates(subset=['ID'])
+    # print("done")
+    # print("putting kununu reviews into database...")
+    # database.put_df_in_sql(new_reviews_kununu, con)
+    # print("done")
 
     # NOTE: Refreshing reviews
     print("checking if older reviews have been removed from platforms or otherwise updated...")
@@ -69,22 +72,28 @@ try:
     scraping.refresh_reviews(refresh, con)
     print("done")
     print("updating database")
-    database.put_df_in_sql(refresh, con, False, True)
+    try:
+        database.put_df_in_sql(refresh, con, False, True)
+    except Exception as ex:
+        log(ex, header="Refreshing")
     print("done")
     
     # NOTE: Completing kununu reviews
     print("pulling reviews with incomplete information from database...")
-    incomplete_rows = database.fetch_incomplete_rows(con, 5)
+    incomplete_rows = database.fetch_incomplete_rows(con, 50)
     print("done")
     print("generating missing data with gaia...")
     gaia.complete_rows(incomplete_rows)
-    print("done")
+    print("done")    
     print("updating reviews...")
-    database.put_df_in_sql(incomplete_rows, con, False, True)
+    try:
+        database.put_df_in_sql(incomplete_rows, con, False, True)
+    except Exception as ex:
+        log(ex, header="Completion")
         
     # NOTE: Generating responses
     print("pulling unanswered reviews from the past few days from database...")
-    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(5))
+    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(days=160)) # 5 datetime.datetime.now() - datetime.timedelta(days=170)
     print("done")
     f = open("df.txt", "w") # Overwrite
     f.write(unanswered_reviews.to_string())
@@ -96,24 +105,27 @@ try:
     f.close()
     print("done")
     print("updating database entries to include answers and gaia data...")
-    database.put_df_in_sql(unanswered_reviews, con, False, True)
+    try:
+        database.put_df_in_sql(unanswered_reviews, con, False, True)
+    except Exception as ex:
+        log(ex, header="Generation")
     print("done")
-    
     f = open("df.txt", "a")
     f.write("\n\n\n" + unanswered_reviews.to_string())
     f.close()
 
     # NOTE: Generating translations
     print("fetching reviews to be translated into english...")
-    to_translate = database.fetch_translate_reviews(con, 10)
+    to_translate = database.fetch_translate_reviews(con, 50)
     print("done")
     print("generating translations...")
     gaia.generate_translations(to_translate)
     print("done")
     print("inserting review translations back into database...")
-    database.put_df_in_sql(to_translate, con, True, True)
-    print("done")
-    
+    try:
+        database.put_df_in_sql(to_translate, con, True, True)
+    except Exception as ex:
+        log(ex, header="Translation")
     print("done")
 
     # NOTE: Backup
@@ -123,16 +135,16 @@ try:
     
     # NOTE: Check for duplicates
     print("checking for duplicates...")
-    dupes = pandas.read_sql("SELECT ID, COUNT(ID) FROM DHL_SCHEMA GROUP BY IDHAVING COUNT(ID) > 1")
-    if dupes:
-        if (not df.empty):
-            log("Dupes found, saving")
-            f = open("dupes.txt", "w") 
-            f.write(dupes.to_string())
-            f.write(f"\n\n Timestamp: {str((datetime.date.today()).strftime('%Y-%m-%d'))}")
-            f.close()
+    dupes = pandas.read_sql("SELECT ID, COUNT(ID) FROM DHL_SCHEMA GROUP BY ID HAVING COUNT(ID) > 1", con)
+    if (not dupes.empty):
+        log("Dupes found, saving")
+        f = open("dupes.txt", "a") 
+        f.write(dupes.to_string())
+        f.write(f"\n\n Timestamp: {str((datetime.date.today()).strftime('%Y-%m-%d'))}\n\n")
+        f.close()
     print("done")
     
     print("finished, exiting...")
+    exit()
 except Exception as e:
     log(e, __file__)

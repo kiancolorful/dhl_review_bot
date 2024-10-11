@@ -14,7 +14,7 @@ OLD_REVIEW_REFRESH_COUNT = -1 # How many of the oldest reviews should be refresh
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
 SQL_SERVER_NAME = r"85.215.196.5" # IP: 85.215.196.5, Instance name: WIN-CIH1M1J41BG
 DATABASE = 'master'
-SQL_TABLE_NAME = 'TEST123'
+SQL_TABLE_NAME = 'DHL_SCHEMA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
 USER = 'kian'
 PW = 'Gosling1'
@@ -63,8 +63,10 @@ def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new
     if not(insert_new or update_existing) or (df.empty): # Don't insert new + don't update old = no action, empty df = no action
         return
     
-    # Clear staging table and put dataframe in
-    df.to_sql(SQL_STAGING_TABLE_NAME, con, if_exists='replace', index=False) # Commits automatically 
+    # Create staging table based on main schema, set primary key and insert dataframe
+    con.execute(sqlalchemy.text(f"SELECT TOP 0 * INTO {SQL_STAGING_TABLE_NAME} FROM {SQL_TABLE_NAME};")) 
+    con.execute(sqlalchemy.text(f"ALTER TABLE {SQL_STAGING_TABLE_NAME} ADD PRIMARY KEY (ID);")) 
+    df.to_sql(SQL_STAGING_TABLE_NAME, con, if_exists='append', index=False) # Commits automatically 
 
     if (insert_new and update_existing): # Do both 
         con.execute(sqlalchemy.text(f"DELETE FROM {SQL_TABLE_NAME} WHERE ID IN (SELECT ID FROM {SQL_STAGING_TABLE_NAME});")) 
@@ -75,8 +77,8 @@ def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new
         con.execute(sqlalchemy.text(f"DELETE FROM {SQL_STAGING_TABLE_NAME} WHERE ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});"))
         con.execute(sqlalchemy.text(f"DELETE FROM {SQL_TABLE_NAME} WHERE ID IN (SELECT ID FROM {SQL_STAGING_TABLE_NAME});"))
         con.execute(sqlalchemy.text(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME};"))
-    # Merge new rows to main table (ignore dupes) and empty staging table
-    con.execute(sqlalchemy.text(f"DELETE FROM {SQL_STAGING_TABLE_NAME};"))
+    # Merge new rows to main table (ignore dupes) and remove staging table
+    con.execute(sqlalchemy.text(f"DROP TABLE {SQL_STAGING_TABLE_NAME};"))
     con.commit()
 
 def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame: 
