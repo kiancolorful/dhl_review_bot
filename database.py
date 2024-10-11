@@ -65,9 +65,12 @@ def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new
     if not(insert_new or update_existing) or (df.empty): # Don't insert new + don't update old = no action, empty df = no action
         return
     
-    # Clear staging table and put dataframe in
-    df.to_sql(SQL_STAGING_TABLE_NAME, con, if_exists='replace', index=False) # Commits automatically 
+    # Create staging table based on main schema, set primary key and insert dataframe
+    con.execute(sqlalchemy.text(f"SELECT TOP 0 * INTO {SQL_STAGING_TABLE_NAME} FROM {SQL_TABLE_NAME};")) 
+    con.execute(sqlalchemy.text(f"ALTER TABLE {SQL_STAGING_TABLE_NAME} ADD PRIMARY KEY (ID);")) 
+    df.to_sql(SQL_STAGING_TABLE_NAME, con, if_exists='append', index=False) # Commits automatically
 
+    # Merge rows into main table
     if (insert_new and update_existing): # Do both 
         con.execute(sqlalchemy.text(f"DELETE FROM {SQL_TABLE_NAME} WHERE ID IN (SELECT ID FROM {SQL_STAGING_TABLE_NAME});")) 
         con.execute(sqlalchemy.text(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME};"))
@@ -77,8 +80,9 @@ def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new
         con.execute(sqlalchemy.text(f"DELETE FROM {SQL_STAGING_TABLE_NAME} WHERE ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});"))
         con.execute(sqlalchemy.text(f"DELETE FROM {SQL_TABLE_NAME} WHERE ID IN (SELECT ID FROM {SQL_STAGING_TABLE_NAME});"))
         con.execute(sqlalchemy.text(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME};"))
-    # Merge new rows to main table (ignore dupes) and empty staging table
-    con.execute(sqlalchemy.text(f"DELETE FROM {SQL_STAGING_TABLE_NAME};"))
+    
+    # Drop temporary staging table
+    con.execute(sqlalchemy.text(f"DROP TABLE {SQL_STAGING_TABLE_NAME};"))
     con.commit()
 
 # Diese Funktion lädt alle unbeantworteten Reviews aus der Datenbank herunter. Mit since kann man eine Untergrenze für das Alter der Reviews angeben. 
