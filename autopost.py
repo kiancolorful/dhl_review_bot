@@ -5,6 +5,21 @@ import sqlalchemy
 import pyperclip
 import time
 
+# Grobe Idee erklärt:
+# Die IT-Sicherheitsteams von Indeed, Glassdoor und kununu sind mit Sicherheit bessere Programmierer und Programmiererinnen als wir. 
+# Da es sich beim Posting von den Responses um etwas handelt, welches ein sehr hohes Risiko trägt (von der Plattform gebannt zu werden) 
+# und nur ein sehr kleines Gewinn bringt (jeden Tag 3 Minuten sparen), haben wir beschlossen, das Posting nur semiautomatisch zu machen, 
+# damit eventuell auftretende Captchas von einem echten Menschen gelöst werden können. So vermeiden wir auch potenzielle legale Hürden. 
+# Das semiautomatische Posting soll folgendermaßen erfolgen:
+# 
+# 1. Hochzuladene Responses werden aus der Datenbank in eine DataFrame geladen.
+# 2. Der Text des ersten Responses wird in die Zwischenablege des Rechners kopiert, und der Link zur Review wird im Browser geöffnet. 
+# 3. Man meldet sich auf der Plattform im DHL-Konto an, fügt den Text per Strg-V in das Textfeld ein und postet sie. 
+# 4. Nachdem die Antwort erfolgreich gepostet wurde, drückt man die Rechts-Taste (Diese kann unten im Code beliebig geändert werden) um 
+#    die nächste Bewertung im Browser zu öffnen und den zugehörigen ResponseText in die Zwischenlage zu kopieren. Man macht dann weiter 
+#    bis alle Bewertungen gepostet sind. Man kann mit der escape-Taste das Programm jederzeit beenden. Bereits hochgeladene Responses werden dabei 
+#    in der Datenbank als hochgeladen markiert. 
+
 # Database credentials
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
 SQL_SERVER_NAME = r"85.215.196.5" # IP: 85.215.196.5, Instance name: WIN-CIH1M1J41BG

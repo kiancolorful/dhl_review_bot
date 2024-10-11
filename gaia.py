@@ -3,6 +3,7 @@ import requests
 import json
 import datetime
 import time
+import re
 from utils import log
 
 GAIA_DEPLOYMENT_ID = "gpt-4-1106" #"gpt-35-turbo-0301"
@@ -103,7 +104,7 @@ Falls es sich in der Unternehemnsbewertung um ein sensibles Thema handelt (z.B. 
 
 SYSTEM_MESSAGE_TRANSLATION = {
     "role": "system",
-    "content": "Translate the following text into English."
+    "content": "Translate the following text into English. If it is already in English, you will return the text without any modification."
 }
 
 SYSTEM_MESSAGE_LANG = {
@@ -200,13 +201,44 @@ Falls der Arbeitnehmer keinen Bewertungstext hinterlassen hat, werden Sie alle F
 '''
 } 
 
-def determine_lang(row):
+# This function removes the English labels that we add to review text for Indeed and Kununu, and returns the review text as a string (df and row are not affected). This helps with language detection.
+def remove_english_labels(row) -> str: 
+    match row.Portal.lower():
+        case 'indeed':
+            text = (row.ReviewText).replace("Pros: ", "")
+            text = text.replace("Cons: ", "")
+            return text
+        case 'kununu':
+            text = re.sub('([^\s]+) rating: [1-5]\/5 ', '', row.ReviewText) # Remove star ratings
+            while('\n\n' in text):
+                text = text.replace('\n\n', '\n')
+            if text == '\n':
+                return ''
+            return text
+        case other:
+            return row.ReviewText
+
+# This function uses GAIA to determine the language of a given text. The lanugage is returned as a two-letter all-caps string, e.g. "ES". Set "just_string" to true if you just want to determine the language of a simple string, not a review
+def determine_lang(row, just_string=False):
     user_message = {
 		"role": "user",
-		"content": "Title: " + row.ReviewTitle + "\nText: " + row.ReviewText
+		"content": ""
 	}
-    # if row.Location:
-    #     user_message['content'] += f"\n(Ort: {row.Location})"
+
+    # Construct user message content depending on whether a review is being processed or just a string
+    if(just_string):
+        if(isinstance(row, str)):
+            user_message["content"] = row
+        else:
+            log("Improper use of determine_lang. A non-str object has been passed, but just_string is True.", __file__)
+            raise Exception("Improper use of determine_lang. A non-str object has been passed, but just_string is True.")
+    else:
+        user_message["content"] = "Title: " + row.ReviewTitle
+        revtext = remove_english_labels(row)
+        if (not (revtext == None or revtext == '')):
+            user_message['content'] += "\nText: " + revtext
+        if row.Location:
+            user_message['content'] += f"\n(Location: {row.Location})"
     
     messages = [SYSTEM_MESSAGE_LANG, user_message]
     
@@ -234,7 +266,8 @@ def determine_lang(row):
         log(ex, __file__, "Could not extract language from GAIA response")
         pass
     return lang 
-    
+
+# This function combines a review's title, text, location and language, and then puts it in a list with the System message (for the GAIA Chat endpoint), which is then returned. 
 def append_user_review(row, lang : str=None) -> list: 
     user_message = {
 		"role": "user",
@@ -246,7 +279,8 @@ def append_user_review(row, lang : str=None) -> list:
     if lang:
         user_message['content'] += f"\n\n(Sprache: {lang})"
     return [SYSTEM_MESSAGE, user_message]
-    
+
+# This function generates GAIA responses for an entire DataFrame based on the content and language of each ReviewText. GAIA analyzes the ReviewText and generates values for StateRegion, Country, SensitiveTopic, etc.
 def generate_responses(df : pandas.DataFrame):
     for row in df.itertuples():
         lang = row.Language
@@ -262,8 +296,11 @@ def generate_responses(df : pandas.DataFrame):
             
             # No more errors
             df.at[row.Index, "Language"] = lang.upper()
-        if (lang.upper() not in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]): # Respond in English if language is not in core 7
-            lang = "EN"
+        if (lang.upper() not in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]): # Respond in English if language is not in core 7, or in German if Portal is kununu
+            if(row.Portal.lower() == 'kununu'):
+                lang = "DE"
+            else:
+                lang = "EN"
         
         # Generate response
         messages = append_user_review(row, lang)
@@ -275,8 +312,10 @@ def generate_responses(df : pandas.DataFrame):
 	        "n": 1, # Number of responses
 	        #"stop": "",    # Stop sequence, e.g. STOP123
 	        "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
-	        "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
+	        "frequency_penalty": 0, # [-2, 2]: Positive = don't repeat phrases verbatim
         }
+        if(row.ApprovalStatus == "Regenerate"):
+            gaia_payload["presence_penalty"] = 1 # TODO: Is this a good idea?
         response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
         if(response.status_code == 429):
                 print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
@@ -297,6 +336,11 @@ def generate_responses(df : pandas.DataFrame):
             log(ex, "Error processing GAIA reply while evaluating response", __file__)
             pass
         try: 
+            if(row.ApprovalStatus == "Regenerate"):
+                df.at[row.Index, "Response"] = gaia_answer["Response"].replace("\\n", "\n")
+                df.at[row.Index, "ApprovalStatus"] = "Pending"
+                continue
+            
             df.at[row.Index, "SensitiveTopic"] = gaia_answer["SensitiveTopic"]
             if row.Location:
                 df.at[row.Index, "StateRegion"] = gaia_answer["StateRegion"]
@@ -322,21 +366,22 @@ def generate_responses(df : pandas.DataFrame):
         print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated {lang} response for review {row.ID}")
     return df
 
+# This function generates EN-Translations for ReviewText and Response. 
 def generate_translations(df : pandas.DataFrame):
     for row in df.itertuples():
         # Determine language
         lang_orig = row.Language
         if(lang_orig == None):
             lang_orig = determine_lang(row)
-            if(lang_orig == 'EN'): # Already English
-                df.at[row.Index, "ReviewTextEN"] = row.ReviewText
-                df.at[row.Index, "ResponseEN"] = row.Response
-                print(f"({str(row.Index + 1)}/{str(len(df.index))})\t{row.ID} is already EN")
-                continue
-            if(isinstance(lang_orig, int)): # Failure
-                df.at[row.Index, "ReviewTextEN"] = None
-                df.at[row.Index, "ResponseEN"] = None
-                continue
+        if(lang_orig == 'EN'): # Already English
+            df.at[row.Index, "ReviewTextEN"] = row.ReviewText
+            df.at[row.Index, "ResponseEN"] = row.Response
+            print(f"({str(row.Index + 1)}/{str(len(df.index))})\t{row.ID} is already EN")
+            continue
+        if(isinstance(lang_orig, int)): # Failure
+            df.at[row.Index, "ReviewTextEN"] = None
+            df.at[row.Index, "ResponseEN"] = None
+            continue
         
         # Needs to be translated
         fields = { # This tuple-dict is the easiest way I found to write the code cleanly
@@ -344,6 +389,17 @@ def generate_translations(df : pandas.DataFrame):
             ("ResponseEN", row.Response)
         }
         for tup in fields:
+            # Skip if there is already an EN version
+            if(tup[0] == "ReviewTextEN"):
+                if(row.ReviewTextEN and row.ReviewTextEN != ""):
+                    continue
+                # If the kununu ReviewText is only the star ratings:
+                elif(remove_english_labels(row) == ''):
+                    df.at[row.Index, tup[0]] = row.ReviewText
+                    continue
+            elif(tup[0] == "ResponseEN" and (row.ResponseEN and row.ResponseEN != "")):
+                continue    
+
             user_message = {
                 "role": "user",
                 "content": tup[1]
@@ -351,31 +407,48 @@ def generate_translations(df : pandas.DataFrame):
             gaia_payload = {
                 "messages": [SYSTEM_MESSAGE_TRANSLATION, user_message], 
                 "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
-                "temperature": 1, # Higher number = less deterministic
+                "temperature": 0, # Higher number = less deterministic # TODO should temperature be 0 here?
                 "top_p": 0.0, # Similar to temperature, don't use both
                 "n": 1, # Number of responses
                 #"stop": "",    # Stop sequence, e.g. STOP123
                 "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
                 "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
             }
-            response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
-            if(response.status_code == 429): # Too many requests, waiting and trying again
-                print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
-                time.sleep(DELAY_429)
+
+            # Generate translation and verify that generated translations are both english
+            is_english = False
+            tries = 3 # Max number of tries before giving up
+            while(not is_english and tries > 0):
+                # Generate translation:
                 response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)
-            if(response.status_code < 200 or response.status_code > 299):
-                log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
-                df.at[row.Index, "DeveloperComment"] = str(response.status_code) + "(tr)"
+                if(response.status_code == 429): # Too many requests, waiting and trying again
+                    print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
+                    time.sleep(DELAY_429)
+                    continue
+                if(response.status_code < 200 or response.status_code > 299):
+                    log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
+                    df.at[row.Index, "DeveloperComment"] = str(response.status_code) + "(translation)"
+                    continue
+                try:
+                    result = json.loads(response.text)['choices'][0]['message']['content']
+                except Exception as ex:
+                    log(ex, "Error processing GAIA reply while translating.", __file__)
+                    continue
+
+                # Verify language:
+                lang_translation = determine_lang(result, True)
+                if(lang_translation.upper() == "EN"):
+                    is_english = True
+                    df.at[row.Index, tup[0]] = result
+                else: 
+                    tries -= 1 # Decrement number of tries
+            if(not is_english):
+                print(f"({str(row.Index + 1)}/{str(len(df.index))})\tfailed to generate {tup[0]} for review {row.ID}")
                 continue
-            try:
-                result = json.loads(response.text)['choices'][0]['message']['content']
-            except Exception as ex:
-                log(ex, "Error processing GAIA reply while translating.", __file__)
-                continue
-            df.at[row.Index, tup[0]] = result
         print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")
     return df
 
+# This function completes missing data which is usually generated by GAIA, for instance in case a review is scraped from kununu that was already answered without manually without using anything from this program. 
 def complete_rows(df : pandas.DataFrame):
     for row in df.itertuples():
         if(row.Response == None): # Do not process reviews with no response yet (shouldn't happen anyway, this is just a failsafe)
@@ -433,49 +506,3 @@ def complete_rows(df : pandas.DataFrame):
             log(ex, "Error filling GAIA JSON into DF, most likely KeyError", __file__)
             pass
     return df
-
-def generate_translations(df : pandas.DataFrame):
-    for row in df.itertuples():
-        # Determine language
-        lang_orig = determine_lang(row)
-        if(lang_orig == 'EN'): # Already English
-            df.at[row.Index, "ReviewTextEN"] = row.ReviewText
-            df.at[row.Index, "ResponseEN"] = row.Response
-            continue
-        if(isinstance(lang_orig, int)): # Failure
-            df.at[row.Index, "ReviewTextEN"] = None
-            df.at[row.Index, "ResponseEN"] = None
-            continue
-        
-        # Needs to be translated
-        fields = { # This tuple-dict is the easiest way I found to write the code cleanly
-            ("ReviewTextEN", row.ReviewText),
-            ("ResponseEN", row.Response)
-        }
-        for tup in fields:
-            user_message = {
-                "role": "user",
-                "content": tup[1]
-            }
-            gaia_payload = {
-                "messages": [SYSTEM_MESSAGE_TRANSLATION, user_message], 
-                "max_tokens": GAIA_TOKENS_PER_RESPONSE, # Length of response
-                "temperature": 1, # Higher number = less deterministic
-                "top_p": 0.0, # Similar to temperature, don't use both
-                "n": 1, # Number of responses
-                #"stop": "",    # Stop sequence, e.g. STOP123
-                "presence_penalty": 0, # [-2, 2]: Positive = Talk about new topics
-                "frequency_penalty": 0, # [-2, 2]: Positive = don't phrases verbatim
-            }
-            response = requests.request("POST", GAIA_CHAT_ENDPOINT, json=gaia_payload, headers=GAIA_HEADERS, params=GAIA_QUERYSTRING)        
-            if(response.status_code < 200 or response.status_code > 299):
-                log(f"Error connecting to GAIA for review {row.ID}. [{response.status_code}]", __file__)
-                df.at[row.Index, "DeveloperComment"] = str(response.status_code) + "(tr)"
-                continue
-            try:
-                result = json.loads(response.text)['choices'][0]['message']['content']
-            except Exception as ex:
-                log(ex, "Error processing GAIA reply while translating.", __file__)
-                continue
-            df.at[row.Index, tup[0]] = result
-        print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")

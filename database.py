@@ -8,7 +8,7 @@ from utils import log
 NEW_REVIEW_REFRESH_DELAY = 14 # After how many days should new reviews be refreshed?
 SENSITIVE_REVIEW_REFRESH_FREQUENCY = 4 # How many days between refreshes for sensitive reviews?
 SENSITIVE_REVIEW_REFRESH_INTERVAL = 21 # For how many days should sensitive reivews be refreshed?
-OLD_REVIEW_REFRESH_COUNT = -1 # How many of the oldest reviews should be refreshed? (negative values mean all reviews for the oldest day in the DB)
+OLD_REVIEW_REFRESH_COUNT = 50 # How many of the oldest reviews should be refreshed? (negative values mean all reviews for the oldest day in the DB)
 
 # SQL Auth stuff
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
@@ -58,6 +58,8 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "last_modified": "datetime"
 }
 
+# Diese Funktion fügt einen DataFrame in die Datenbank ein. insert_new und update_existing bestimmen jeweils, 
+# ob neue Zeilen eingefügt werden sollen, und ob existierende Zeilen überschrieben werden sollen. 
 def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new=True, update_existing=False): 
     # DEFAULT: ONLY INSERT NEW RECORDS, DON'T UPDATE
     if not(insert_new or update_existing) or (df.empty): # Don't insert new + don't update old = no action, empty df = no action
@@ -66,8 +68,9 @@ def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new
     # Create staging table based on main schema, set primary key and insert dataframe
     con.execute(sqlalchemy.text(f"SELECT TOP 0 * INTO {SQL_STAGING_TABLE_NAME} FROM {SQL_TABLE_NAME};")) 
     con.execute(sqlalchemy.text(f"ALTER TABLE {SQL_STAGING_TABLE_NAME} ADD PRIMARY KEY (ID);")) 
-    df.to_sql(SQL_STAGING_TABLE_NAME, con, if_exists='append', index=False) # Commits automatically 
+    df.to_sql(SQL_STAGING_TABLE_NAME, con, if_exists='append', index=False) # Commits automatically
 
+    # Merge rows into main table
     if (insert_new and update_existing): # Do both 
         con.execute(sqlalchemy.text(f"DELETE FROM {SQL_TABLE_NAME} WHERE ID IN (SELECT ID FROM {SQL_STAGING_TABLE_NAME});")) 
         con.execute(sqlalchemy.text(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME};"))
@@ -77,30 +80,37 @@ def put_df_in_sql(df : pandas.DataFrame, con : sqlalchemy.Connection, insert_new
         con.execute(sqlalchemy.text(f"DELETE FROM {SQL_STAGING_TABLE_NAME} WHERE ID NOT IN (SELECT ID FROM {SQL_TABLE_NAME});"))
         con.execute(sqlalchemy.text(f"DELETE FROM {SQL_TABLE_NAME} WHERE ID IN (SELECT ID FROM {SQL_STAGING_TABLE_NAME});"))
         con.execute(sqlalchemy.text(f"INSERT INTO {SQL_TABLE_NAME} SELECT * FROM {SQL_STAGING_TABLE_NAME};"))
-    # Merge new rows to main table (ignore dupes) and remove staging table
+    
+    # Drop temporary staging table
     con.execute(sqlalchemy.text(f"DROP TABLE {SQL_STAGING_TABLE_NAME};"))
     con.commit()
 
-def fetch_unanswered_reviews(engine, since=False) -> pandas.DataFrame: 
+# Diese Funktion lädt alle unbeantworteten Reviews aus der Datenbank herunter. Mit since kann man eine Untergrenze für das Alter der Reviews angeben. 
+def fetch_unanswered_reviews(con, since=False) -> pandas.DataFrame: 
     try:
         if since:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ((Response='' OR Response IS NULL) AND ReviewDate>='{since.strftime('%Y-%m-%d')}') OR ApprovalStatus='Regenerate'", engine)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ((Response='' OR Response IS NULL) AND ReviewDate>='{since.strftime('%Y-%m-%d')}') OR ApprovalStatus='Regenerate'", con)
         else:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (Response='' OR Response IS NULL) OR ApprovalStatus='Regenerate'", engine)
-        return df
-    except pyodbc.Error as ex:
-        log(ex, __file__)
-        
-def fetch_incomplete_rows(engine, count : int=None) -> pandas.DataFrame: # These reviews were answered on kununu before the bot got to them. The goal of this is to fill out the extra information columns for these. 
-    try:
-        if count:
-            df = pandas.read_sql(f"SELECT TOP {count} * FROM {SQL_TABLE_NAME} WHERE NOT (Response='' OR Response IS NULL) AND SensitiveTopic IS NULL", engine) # Using SensitiveTopic arbitrarily, scores would work as well
-        else:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE NOT (Response='' OR Response IS NULL) AND SensitiveTopic IS NULL", engine)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (Response='' OR Response IS NULL) OR ApprovalStatus='Regenerate'", con)
         return df
     except pyodbc.Error as ex:
         log(ex, __file__)
 
+# These reviews were answered on kununu before the bot got to them. The goal of this is to fill out the extra information columns for these, which are usually filled out by GAIA when generating a response. 
+def fetch_incomplete_rows(con, count : int=None) -> pandas.DataFrame: 
+    try:
+        if count:
+            df = pandas.read_sql(f"SELECT TOP {count} * FROM {SQL_TABLE_NAME} WHERE NOT (Response='' OR Response IS NULL) AND SensitiveTopic IS NULL", con) # Using SensitiveTopic arbitrarily, scores would work as well
+        else:
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE NOT (Response='' OR Response IS NULL) AND SensitiveTopic IS NULL", con)
+        return df
+    except pyodbc.Error as ex:
+        log(ex, __file__)
+
+# Diese Funktion lädt alle Reviews us der Datenbank herunter, die "refresht" werden müssen (es hauptsächlich wird geschaut, ob die Review noch online ist).
+# df_new besteht aus Reviews, die genau 2 Wochen alt sind. 
+# df_sen besteht aus Reviews, die SensitiveTopics sind und weniger als 3 Wochen alt sind. 
+# df_old besteht aus den Reviews, die am längsten nicht "refresht" worden sind. 
 def fetch_refresh_reviews(con) -> pandas.DataFrame:
     try:
         # new reviews
@@ -118,13 +128,27 @@ def fetch_refresh_reviews(con) -> pandas.DataFrame:
         return df_all 
     except Exception as ex:
         log(ex, __file__)
-        
+
+# Evtl. sind die DHL-Mitarbeitenden ab und zu unzufrieden mit einer von GAIA generierten Response. In dem Fall können Sie Ihn mit "Regenerate" in der Datenbank markieren. 
+# Dies sagt aus, dass die Antwort von GAIA nochmal neu generiert werden soll. Diese Funktion holt alle Reviews, die mit "Regenerate" markiert sind. Mit count kann 
+# eine Maximalanzahl an zurückgegebene Reviews gesetzt werden. 
+def fetch_regenerate_reviews(con, count : int=None) -> pandas.DataFrame:
+    try:
+        if count:
+            df = pandas.read_sql(f"SELECT TOP {count} * FROM {SQL_TABLE_NAME} WHERE ApprovalStatus='Regenerate'", con) # Regenerate might be replace with refresh
+        else:
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ApprovalStatus='Regenerate'", con)
+        return df
+    except pyodbc.Error as ex:
+        log(ex, __file__)
+
+# Diese Funktion holt alle reviews, wo eine Response schon exitiert, aber keine EN-Übersetzung. 
 def fetch_translate_reviews(con, num : int=None) -> pandas.DataFrame:
     try:
         if(num):
-            df = pandas.read_sql(f"SELECT TOP {num} * FROM {SQL_TABLE_NAME} WHERE ReviewTextEN IS NULL AND ResponseEN IS NULL AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
+            df = pandas.read_sql(f"SELECT TOP {num} * FROM {SQL_TABLE_NAME} WHERE (ReviewTextEN IS NULL OR ResponseEN IS NULL) AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
         else:
-            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE ReviewTextEN IS NULL AND ResponseEN IS NULL AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
+            df = pandas.read_sql(f"SELECT * FROM {SQL_TABLE_NAME} WHERE (ReviewTextEN IS NULL OR ResponseEN IS NULL) AND Response IS NOT NULL ORDER BY ReviewDate DESC", con)
         return df
     except Exception as ex:
         log(ex, __file__, "Error connecting to database while trying to translate reviews.")

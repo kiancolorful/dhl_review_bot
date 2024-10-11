@@ -13,17 +13,20 @@ MAX_WEX_CALLS = 2
 WEXTRACTOR_AUTH_TOKEN = "68e2113b07b07c6cede5d513b66eba5f8db1701b" 
 
 # Scrapingdog info
-SCRAPINGDOG_API_KEY_KIAN = "65a943782f78003318229a41"
-SCRAPINGDOG_API_KEY_ELENA = "6619300786d2b244207115b9"
+SCRAPINGDOG_API_KEY = "67092708f5c5d4b13601b94a"
+# SCRAPINGDOG_API_KEY_TOOLS = "66c72a43bf5a414c4fe14687"
+# SCRAPINGDOG_API_KEY_KIAN = "65a943782f78003318229a41"
+# SCRAPINGDOG_API_KEY_ELENA = "6619300786d2b244207115b9"
 
-
+# Wextractor gibt Datetimes als String zurück. Diese Funktion wandelt gibt die String als Datetime-Objekt zurück.
 def wex_string_to_datetime(str): 
     return datetime.datetime.strptime(str, "%Y-%m-%dT%H:%M:%S")
 
-def supplement_kununu_data(row): # Supplements Department, Position, CurrentFormerEmployee, ContractTerminationKununuOnly
+# Nicht alle benötigten Daten werden von Wextractor gesammelt. Diese Funktion scrapt Department, Position, 
+# CurrentFormerEmployee und ContractTerminationKununuOnly und fügt die Werte in die DateFrame ein 
+def supplement_kununu_data(row): 
     url = row["Link"]
-    #response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={url}&dynamic=false")
-    response = requests.get(url) # HOTFIX!!! TODO: REMOVE
+    response = requests.get(url) 
     if(response.status_code < 200 or response.status_code > 299): # Bad request
         log(f"Error connecting to Kununu through Scrapingdog. Row ID: {row.ID}, Status code: {response.status_code}", __file__)
         return
@@ -55,6 +58,7 @@ def supplement_kununu_data(row): # Supplements Department, Position, CurrentForm
     except: 
         print("Error parsing Kununu! Link: " + row["Link"])
 
+# kununu-Bewertungen enthalten nicht nur einen ReviewText, sondern auch Sternebewertungen. Diese Funktion gibt diese Sternebewertungen als String zurück.
 def append_kununu_scores(review):
     scores = "\n"
     for key in review:
@@ -66,6 +70,7 @@ def append_kununu_scores(review):
         scores = scores[2:]
     return scores
 
+# Diese Funktion nutzt Wextractor um für ein gegebenes Portal die neusten Reviews herunterzuladen. Der Parameter "since" setzt eine Untergrenze für das Alter der gesammelten Reviews. 
 def extract_new_reviews(portal : str, since : datetime): # new version
     list_of_dicts = []
     match portal.lower():
@@ -218,58 +223,78 @@ def extract_new_reviews(portal : str, since : datetime): # new version
             return None
     return pandas.DataFrame(list_of_dicts)
 
+# Diese Funktion schaut, ob Reviews noch online sind. Falls ja, wird anschließend der ResponseText nochmal gescrapt und in dem DataFrame aktualisiert. 
 def refresh_reviews(df : pandas.DataFrame, con):
-    # look reviews up and update df
     for row in df.itertuples():
-        if(row.Portal != 'kununu'): # TODO: buy scrapingdog please and get rid of this
-            continue
-        #TODO response = requests.get(f"https://api.scrapingdog.com/scrape?api_key={SCRAPINGDOG_API_KEY_ELENA}&url={row.Link}&dynamic=false")
-        time.sleep(1)
-        response = requests.get(row.Link)
-        if(response.status_code < 200 or response.status_code > 299): # Bad request
+        #time.sleep(1)
+        params = {
+            'api_key': SCRAPINGDOG_API_KEY,
+            'url': row.Link,
+            'dynamic': 'false',
+        }
+        response = None # Initialize response in this scope
+
+        if(row.Portal.lower() == "indeed"):
+            params["premium"] = "true" # Indeed requires premium proxies
+            
+        for i in range(10): # Retry up to 10 times
+                response = requests.get("https://api.scrapingdog.com/scrape", params)
+                if(response.status_code in range(200, 300) or response.status_code == 404):
+                    break
+
+        if(response.status_code not in range(200, 300)): # Bad request TODO: Handle scraping dog error codes
             if(response.status_code == 404): # Review was taken offline
                 df.at[row.Index, "OnlineYesNo"] = "No"
                 df.at[row.Index, "RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
                 print(f"({str(row.Index + 1)}/{str(len(df.index))})\trefreshed review {row.ID} (offline)")
-            print(f"({str(row.Index + 1)}/{str(len(df.index))})\tSomething weird happened. Code: {response.status_code}, ID: {row.ID}")
+            elif(response.status_code == 404): # Out of API credits
+                print("Out of Scrapigdog credits!")
+                return
+            else:
+                print(f"({str(row.Index + 1)}/{str(len(df.index))})\tSomething weird happened. Scrapingdog code: {response.status_code}, ID: {row.ID}")
             continue
+
         soup = bs4.BeautifulSoup(response.text, "html.parser")
-        match row.Portal.lower():
-            case "indeed":
-                rev = soup.find(class_="css-14nhnfd e37uo190")
-                resp = rev.find(class_="css-j3kgaw e1wnkr790")
-                if resp:
-                    df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
-                    for br in resp.find_all("br"):
-                        br.replace_with("\n")
-                    df.at[row.Index, "Response"] = resp.text
-                    df.at[row.Index, "ApprovalStatus"] = "Approved"
-                else:
-                    df.at[row.Index, "ResponsePostedYesNo"] = "No"
-            case "glassdoor":
-                rev = soup.find(class_="review-details_reviewDetails__4N3am")
-                resp = rev.find(class_="review-details_isCollapsed__5mhq_ newEmployerResponseText px-std")
-                if resp:
-                    df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
-                    for br in resp.find_all("br"):
-                        br.replace_with("\n")
-                    df.at[row.Index, "Response"] = resp.text
-                    df.at[row.Index, "ApprovalStatus"] = "Approved"
-                else:
-                    df.at[row.Index, "ResponsePostedYesNo"] = "No"
-            case "kununu":
-                resp = soup.find(class_="index__responseBlock__A5fqZ")
-                if resp:
-                    df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
-                    resp = resp.find(class_="p-small-regular")
-                    for br in resp.find_all("br"):
-                        br.replace_with("\n")
-                    df.at[row.Index, "Response"] = resp.text
-                    df.at[row.Index, "ApprovalStatus"] = "Approved"
-                else:
-                    df.at[row.Index, "ResponsePostedYesNo"] = "No"
-            case other:
-                log(f"Non-supported portal found while refreshing reviews. (ID = {row.ID})")
+        try:
+            match row.Portal.lower():
+                case "indeed":
+                    rev = soup.find(class_="css-14nhnfd e37uo190")
+                    resp = rev.find(class_="css-j3kgaw e1wnkr790")
+                    if resp:
+                        df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
+                        for br in resp.find_all("br"):
+                            br.replace_with("\n")
+                        df.at[row.Index, "Response"] = resp.text
+                        df.at[row.Index, "ApprovalStatus"] = "Approved"
+                    else:
+                        df.at[row.Index, "ResponsePostedYesNo"] = "No"
+                case "glassdoor":
+                    rev = soup.find(class_="review-details_reviewDetails__4N3am")
+                    resp = rev.find('span', attrs={"data-test": "review-text-undefined"})
+                    if resp:
+                        df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
+                        for br in resp.find_all("br"):
+                            br.replace_with("\n")
+                        df.at[row.Index, "Response"] = resp.text
+                        df.at[row.Index, "ApprovalStatus"] = "Approved"
+                    else:
+                        df.at[row.Index, "ResponsePostedYesNo"] = "No"
+                case "kununu":
+                    resp = soup.find(class_="index__responseBlock__A5fqZ")
+                    if resp:
+                        df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
+                        resp = resp.find(class_="p-small-regular")
+                        for br in resp.find_all("br"):
+                            br.replace_with("\n")
+                        df.at[row.Index, "Response"] = resp.text
+                        df.at[row.Index, "ApprovalStatus"] = "Approved"
+                    else:
+                        df.at[row.Index, "ResponsePostedYesNo"] = "No"
+                case other:
+                    log(f"Non-supported portal found while refreshing reviews. (ID = {row.ID})")
+        except Exception as ex:
+            log(ex, __file__, "Error while parsing portal website, most likely an element name was changed.")
+            pass
         df.at[row.Index, "RefreshDate"] = (datetime.date.today()).strftime('%Y-%m-%d')
         df.at[row.Index, "OnlineYesNo"] = "Yes"
         print(f"({str(row.Index + 1)}/{str(len(df.index))})\trefreshed review {row.ID}")

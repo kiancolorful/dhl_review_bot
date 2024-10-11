@@ -2,37 +2,31 @@ import datetime
 import sqlalchemy
 import gaia 
 import database 
-import posting 
 import scraping
-import pandas
-from utils import log, backup
+from utils import log, backup, check_for_dupes
 
 # Main
 
     # Steps: 
-    #   1. Get new reviews from Wextractor
-    #   2. Put these reviews into the SQL Database (staging, then main)
-    #   3. Repeat Steps 1 & 2 for each portal
-    #   4. Review refreshing
+    #   1. Initialize database connection
+    #   2. Get new reviews from Wextractor for each portal 
+    #   3. Refresh a few reviews from the database (check if they are still online)
     #       a. Select some reviews from the database that are a bit older
     #       b. Check if they are still online, updating the DB if they aren't
-    #   5. Review completion
-    #       a. Determine which reviews have a response but no additional GAIA data (kununu reviews that were answered manually before the bot got to them)
-    #       b. Feed these into GAIA to generate the additional GAIA data
-    #   6. Pull unanswered reviews from SQL Database (most likely only recent ones)
-    #   7. Feed these into GAIA one by one
+    #   4. If there are any kununu reviews that are missing some information, use GAIA to fill in this information
+    #   5. Pull unanswered reviews from SQL Database (most likely only recent ones), and feed them into GAIA one by one
     #       a. Determine language of review
     #       b. Generate response in this language
-    #   8. Upload GAIA responses to database
-    #   9. Review/Response translation
+    #   7. Regenerate responses that are marked by the DHL team as "regenerate"
+    #   8. Review/Response translation
     #       a. Fetch 10 reviews from DB with no translation
     #       b. If they are not in English already, generate an English translation of the review text and the response
     #       c. If they are already in English, use the original texts as the EN translations
-    #   10. Backup: save antire database as a CSV in "Backups" folder
-    # 11. Blob storage: send this CSV file to DHL's Azure blob storage
+    #   9. Create CSV backup of database
+    #   10. Check for duplicate entries in database
+    #   11. Close connection to database
 
-try:
-    
+try: 
     # NOTE: Init 
     print("start")
     engine = sqlalchemy.create_engine(f"mssql+pyodbc://{database.USER}:{database.PW}@{database.SQL_SERVER_NAME}/{database.DATABASE}?driver={database.MSSQL_DRIVER}")
@@ -44,27 +38,30 @@ try:
     print("done")
     
     # NOTE: Scraping reviews
-    # print("extracting new indeed reviews...")
-    # new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
-    # new_reviews_indeed.drop_duplicates(subset=['ID'])
-    # print("done")
-    # print("putting indeed reviews into database...")
-    # database.put_df_in_sql(new_reviews_indeed, con)
-    # print("done")
-    # print("extracting new glassdoor reviews...")
-    # new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
-    # new_reviews_glassdoor.drop_duplicates(subset=['ID'])
-    # print("done")
-    # print("putting glassdoor reviews into database...")
-    # database.put_df_in_sql(new_reviews_glassdoor, con)
-    # print("done")
-    # print("extracting new kununu reviews...")
-    # new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
-    # new_reviews_kununu.drop_duplicates(subset=['ID'])
-    # print("done")
-    # print("putting kununu reviews into database...")
-    # database.put_df_in_sql(new_reviews_kununu, con)
-    # print("done")
+    print("extracting new indeed reviews...")
+    new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
+    new_reviews_indeed.drop_duplicates(subset=['ID'])
+    print("done")
+    print("putting indeed reviews into database...")
+    database.put_df_in_sql(new_reviews_indeed, con)
+    print("done")
+    print("extracting new glassdoor reviews...")
+    new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
+    new_reviews_glassdoor.drop_duplicates(subset=['ID'])
+    print("done")
+    print("putting glassdoor reviews into database...")
+    database.put_df_in_sql(new_reviews_glassdoor, con)
+    print("done")
+    print("extracting new kununu reviews...")
+    new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
+    new_reviews_kununu.drop_duplicates(subset=['ID'])
+    print("done")
+    print("putting kununu reviews into database...")
+    try:
+        database.put_df_in_sql(new_reviews_kununu, con)
+    except Exception as ex:
+        log(ex, header="(Scraping)")
+    print("done")
 
     # NOTE: Refreshing reviews
     print("checking if older reviews have been removed from platforms or otherwise updated...")
@@ -75,9 +72,9 @@ try:
     try:
         database.put_df_in_sql(refresh, con, False, True)
     except Exception as ex:
-        log(ex, header="Refreshing")
+        log(ex, header="(Refreshing)")
     print("done")
-    
+        
     # NOTE: Completing kununu reviews
     print("pulling reviews with incomplete information from database...")
     incomplete_rows = database.fetch_incomplete_rows(con, 50)
@@ -89,11 +86,12 @@ try:
     try:
         database.put_df_in_sql(incomplete_rows, con, False, True)
     except Exception as ex:
-        log(ex, header="Completion")
-        
+        log(ex, header="(Completing)")
+    print("done")
+
     # NOTE: Generating responses
     print("pulling unanswered reviews from the past few days from database...")
-    unanswered_reviews = database.fetch_unanswered_reviews(engine, datetime.datetime.now() - datetime.timedelta(days=160)) # 5 datetime.datetime.now() - datetime.timedelta(days=170)
+    unanswered_reviews = database.fetch_unanswered_reviews(con, datetime.datetime.now() - datetime.timedelta(5))
     print("done")
     f = open("df.txt", "w") # Overwrite
     f.write(unanswered_reviews.to_string())
@@ -108,11 +106,22 @@ try:
     try:
         database.put_df_in_sql(unanswered_reviews, con, False, True)
     except Exception as ex:
-        log(ex, header="Generation")
+        log(ex, header="(Generating)")
     print("done")
-    f = open("df.txt", "a")
-    f.write("\n\n\n" + unanswered_reviews.to_string())
-    f.close()
+    
+    # NOTE: Regenerating responses
+    print("pulling reviews marked for regeneration from database...")
+    regenerate = database.fetch_regenerate_reviews(con, 20)
+    print("done")
+    print("generating response and gaia data for unanswered reviews...")
+    gaia.generate_responses(regenerate)
+    print("done")
+    print("updating database entries to include answers and gaia data...")
+    try:
+        database.put_df_in_sql(regenerate, con, False, True)
+    except Exception as ex:
+        log(ex, header="(Regenerating)")
+    print("done")
 
     # NOTE: Generating translations
     print("fetching reviews to be translated into english...")
@@ -125,7 +134,7 @@ try:
     try:
         database.put_df_in_sql(to_translate, con, True, True)
     except Exception as ex:
-        log(ex, header="Translation")
+        log(ex, header="(Translations)")
     print("done")
 
     # NOTE: Backup
@@ -134,17 +143,12 @@ try:
     print("done")
     
     # NOTE: Check for duplicates
-    print("checking for duplicates...")
-    dupes = pandas.read_sql("SELECT ID, COUNT(ID) FROM DHL_SCHEMA GROUP BY ID HAVING COUNT(ID) > 1", con)
-    if (not dupes.empty):
-        log("Dupes found, saving")
-        f = open("dupes.txt", "a") 
-        f.write(dupes.to_string())
-        f.write(f"\n\n Timestamp: {str((datetime.date.today()).strftime('%Y-%m-%d'))}\n\n")
-        f.close()
-    print("done")
+    check_for_dupes(con)
     
     print("finished, exiting...")
-    exit()
-except Exception as e:
-    log(e, __file__)
+    con.close()
+except Exception as ex:
+    # NOTE: Check for duplicates
+    check_for_dupes(con)
+    
+    log(ex, __file__)
