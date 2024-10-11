@@ -269,7 +269,7 @@ def refresh_reviews(df : pandas.DataFrame, con):
                     else:
                         df.at[row.Index, "ResponsePostedYesNo"] = "No"
                 case "glassdoor":
-                    rev = soup.find(class_="review-details_reviewDetails__4N3am")
+                    rev = soup.find(class_="review-details_reviewDetails__wSGbU")
                     resp = rev.find('span', attrs={"data-test": "review-text-undefined"})
                     if resp:
                         df.at[row.Index, "ResponsePostedYesNo"] = "Yes"
