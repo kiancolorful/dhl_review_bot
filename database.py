@@ -8,7 +8,7 @@ from utils import log
 NEW_REVIEW_REFRESH_DELAY = 14 # After how many days should new reviews be refreshed?
 SENSITIVE_REVIEW_REFRESH_FREQUENCY = 4 # How many days between refreshes for sensitive reviews?
 SENSITIVE_REVIEW_REFRESH_INTERVAL = 21 # For how many days should sensitive reivews be refreshed?
-OLD_REVIEW_REFRESH_COUNT = 50 # How many of the oldest reviews should be refreshed? (negative values mean all reviews for the oldest day in the DB)
+OLD_REVIEW_REFRESH_COUNT = 20 # How many of the oldest reviews should be refreshed? (negative values mean all reviews for the oldest day in the DB)
 
 # SQL Auth stuff
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
