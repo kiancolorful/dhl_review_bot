@@ -118,6 +118,7 @@ SYSTEM_MESSAGE_LANG = {
     If the text is written in French, your response will be 'FR'. 
     If the text is written in Portuguese, your response will be 'PT'. 
     If the text is written in another language or you cannot determine the language, you will determine the language based off of the location.
+    If the text contains multiple languages, you will choose the main language if the text and disregard the others.
     If the review text contains rating labels such as "atmosphere rating: 5/5", you will not factor these rating labels into your decision.
     If there is no location and you still cannot determine the language, your response will be 'Other'.
     '''
@@ -293,7 +294,6 @@ def generate_responses(df : pandas.DataFrame):
                     lang = determine_lang(row)
             if (isinstance(lang, int)): # Request gave an error
                 continue
-            
             # No more errors
             df.at[row.Index, "Language"] = lang.upper()
         if (lang.upper() not in ["DE", "EN", "NL", "IT", "ES", "FR", "PT"]): # Respond in English if language is not in core 7, or in German if Portal is kununu
@@ -444,6 +444,7 @@ def generate_translations(df : pandas.DataFrame):
                     tries -= 1 # Decrement number of tries
             if(not is_english):
                 print(f"({str(row.Index + 1)}/{str(len(df.index))})\tfailed to generate {tup[0]} for review {row.ID}")
+                df.at[row.Index, "DeveloperComment"] = "Check lang"
                 continue
         print(f"({str(row.Index + 1)}/{str(len(df.index))})\tgenerated EN translation for review {row.ID}")
     return df
@@ -498,9 +499,19 @@ def complete_rows(df : pandas.DataFrame):
             df.at[row.Index, "SensitiveTopic"] = gaia_answer["SensitiveTopic"]
             df.at[row.Index, "MainpositiveAspect"] = gaia_answer["MainpositiveAspect"]
             df.at[row.Index, "MainAreaofImprovement"] = gaia_answer["MainAreaofImprovement"]
-            df.at[row.Index, "EmpathyScore"] = gaia_answer["EmpathyScore"]
-            df.at[row.Index, "HelpfulnessScore"] = gaia_answer["HelpfulnessScore"]
-            df.at[row.Index, "IndividualityScore"] = gaia_answer["IndividualityScore"]
+            df.at[row.Index, "EmpathyScore"] = float(gaia_answer["EmpathyScore"])
+            df.at[row.Index, "HelpfulnessScore"] = float(gaia_answer["HelpfulnessScore"])
+            df.at[row.Index, "IndividualityScore"] = float(gaia_answer["IndividualityScore"])
+            if(row.Language == None):
+                lang = determine_lang(row)
+                if(lang == 429): # Too many requests
+                        print(f"Too many requests! [429] Waiting {DELAY_429} seconds and trying again...")
+                        time.sleep(DELAY_429)
+                        lang = determine_lang(row)
+                if (isinstance(lang, int)): # Request gave an error
+                    continue
+                # No error
+                df.at[row.Index, "Language"] = lang.upper()
             print(f"({str(row.Index + 1)}/{str(len(df.index))})\tadded missing info for {row.ID}")
         except Exception as ex:
             log(ex, "Error filling GAIA JSON into DF, most likely KeyError", __file__)

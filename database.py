@@ -12,7 +12,7 @@ OLD_REVIEW_REFRESH_COUNT = 20 # How many of the oldest reviews should be refresh
 
 # SQL Auth stuff
 MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
-SQL_SERVER_NAME = r"85.215.196.5" # IP: 85.215.196.5, Instance name: WIN-CIH1M1J41BG
+SQL_SERVER_NAME = r"10.253.0.1" # VPN IP: 10.253.0.1, Public IP: 85.215.196.5, Instance name: WIN-CIH1M1J41BG
 DATABASE = 'master'
 SQL_TABLE_NAME = 'DHL_SCHEMA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'

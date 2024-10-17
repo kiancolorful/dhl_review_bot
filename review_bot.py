@@ -39,7 +39,7 @@ try:
     
     # NOTE: Scraping reviews
     print("extracting new indeed reviews...")
-    new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(2))
+    new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(3))
     new_reviews_indeed.drop_duplicates(subset=['ID'])
     print("done")
     print("putting indeed reviews into database...")
@@ -57,23 +57,20 @@ try:
     new_reviews_kununu.drop_duplicates(subset=['ID'])
     print("done")
     print("putting kununu reviews into database...")
-    try:
-        database.put_df_in_sql(new_reviews_kununu, con)
-    except Exception as ex:
-        log(ex, header="(Scraping)")
+    database.put_df_in_sql(new_reviews_kununu, con)
     print("done")
 
     # NOTE: Refreshing reviews
-    print("checking if older reviews have been removed from platforms or otherwise updated...")
-    refresh = database.fetch_refresh_reviews(con)
-    scraping.refresh_reviews(refresh, con)
-    print("done")
-    print("updating database")
-    try:
-        database.put_df_in_sql(refresh, con, False, True)
-    except Exception as ex:
-        log(ex, header="(Refreshing)")
-    print("done")
+    # print("checking if older reviews have been removed from platforms or otherwise updated...")
+    # refresh = database.fetch_refresh_reviews(con)
+    # scraping.refresh_reviews(refresh, con)
+    # print("done")
+    # print("updating database")
+    # try:
+    #     database.put_df_in_sql(refresh, con, False, True)
+    # except Exception as ex:
+    #     log(ex, header="(Refreshing)")
+    # print("done")
         
     # NOTE: Completing kununu reviews
     print("pulling reviews with incomplete information from database...")
@@ -91,7 +88,7 @@ try:
 
     # NOTE: Generating responses
     print("pulling unanswered reviews from the past few days from database...")
-    unanswered_reviews = database.fetch_unanswered_reviews(con, datetime.datetime.now() - datetime.timedelta(5))
+    unanswered_reviews = database.fetch_unanswered_reviews(con, datetime.datetime.now() - datetime.timedelta(days=10))
     print("done")
     f = open("df.txt", "w") # Overwrite
     f.write(unanswered_reviews.to_string())
@@ -111,7 +108,7 @@ try:
     
     # NOTE: Regenerating responses
     print("pulling reviews marked for regeneration from database...")
-    regenerate = database.fetch_regenerate_reviews(con, 20)
+    regenerate = database.fetch_regenerate_reviews(con, count=10)
     print("done")
     print("generating response and gaia data for unanswered reviews...")
     gaia.generate_responses(regenerate)
@@ -125,7 +122,7 @@ try:
 
     # NOTE: Generating translations
     print("fetching reviews to be translated into english...")
-    to_translate = database.fetch_translate_reviews(con, 50)
+    to_translate = database.fetch_translate_reviews(con, 20)
     print("done")
     print("generating translations...")
     gaia.generate_translations(to_translate)
