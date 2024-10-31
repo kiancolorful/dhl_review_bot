@@ -11,8 +11,11 @@ SENSITIVE_REVIEW_REFRESH_INTERVAL = 21 # For how many days should sensitive reiv
 OLD_REVIEW_REFRESH_COUNT = 20 # How many of the oldest reviews should be refreshed? (negative values mean all reviews for the oldest day in the DB)
 
 # SQL Auth stuff
-MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' # Alternative: ODBC Driver 17 for SQL Server
-SQL_SERVER_NAME = r"10.253.0.1" # VPN IP: 10.253.0.1, Public IP: 85.215.196.5, Instance name: WIN-CIH1M1J41BG
+MSSQL_DRIVER = 'ODBC Driver 17 for SQL Server' 
+SQL_INSTANCE_NAME = r"WIN-CIH1M1J41BG" 
+SQL_SERVER_IP_WG = r"10.253.0.1" 
+SQL_SERVER_IP_PUBLIC = r"85.215.196.5"
+SQL_SERVER_URL = r"wpdweserstadion.de"
 DATABASE = 'master'
 SQL_TABLE_NAME = 'DHL_SCHEMA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
