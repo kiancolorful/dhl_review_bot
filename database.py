@@ -2,6 +2,7 @@ import pyodbc
 import sqlalchemy
 import pandas
 import datetime
+import json
 from utils import log
 
 # Review refresh parameters (see documentation)
@@ -19,8 +20,6 @@ SQL_SERVER_URL = r"wpdweserstadion.de"
 DATABASE = 'master'
 SQL_TABLE_NAME = 'DHL_SCHEMA'
 SQL_STAGING_TABLE_NAME = 'DHL_STAGING'
-USER = 'kian'
-PW = 'Gosling1'
 
 # Data model
 DATABASE_COLUMNS_AND_DATA_TYPES = {
@@ -60,6 +59,22 @@ DATABASE_COLUMNS_AND_DATA_TYPES = {
     "DeveloperComment": "nvarchar(255)",
     "last_modified": "datetime"
 }
+
+# This function creates a database engine and returns it. It works for both remote and local connections. 
+# NOTE: DO NOT HARDCODE CREDENTIALS IN CODE. Otherwise, they will appear in plain text on the host machine. Instead, load them from a local JSON. 
+def make_engine(remote_local="local"):
+    match remote_local:
+        case "local":
+            return sqlalchemy.create_engine(f'mssql+pyodbc://@{SQL_INSTANCE_NAME}/{DATABASE}?trusted_connection=yes&driver={MSSQL_DRIVER}')
+        case "remote":
+            creds = None
+            with open('creds.json', 'r') as file:
+                creds = json.load(file)
+            user = creds["user"]
+            passw = creds["pass"]
+            return sqlalchemy.create_engine(f"mssql+pyodbc://{user}:{passw}@{SQL_SERVER_URL}:52603/{DATABASE}?driver={MSSQL_DRIVER}")
+        case other:
+            raise Exception("\nNo file with credentials found. Did you forget to change back to local database access?")
 
 # Diese Funktion fügt einen DataFrame in die Datenbank ein. insert_new und update_existing bestimmen jeweils, 
 # ob neue Zeilen eingefügt werden sollen, und ob existierende Zeilen überschrieben werden sollen. 

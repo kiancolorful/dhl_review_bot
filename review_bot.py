@@ -29,9 +29,8 @@ from utils import log, backup, check_for_dupes
 try: 
     # NOTE: Init 
     print("start")
-    # NOTE: Only one of these engines should be created. The top one is for remote connections (development, testing, etc.), the bottom one is for local connections (production)
-    engine = sqlalchemy.create_engine(f"mssql+pyodbc://{database.USER}:{database.PW}@{database.SQL_SERVER_URL}/{database.DATABASE}?driver={database.MSSQL_DRIVER}") # Remote connection
-    #engine = sqlalchemy.create_engine(f'mssql+pyodbc://@{database.SQL_INSTANCE_NAME}/{database.DATABASE}?trusted_connection=yes&driver={database.MSSQL_DRIVER}') # Local connection
+    # NOTE: use either "local" or "remote"
+    engine = database.make_engine("remote") # Remote connection
     print("connecting to db...")
     con = engine.connect()
     if not con:

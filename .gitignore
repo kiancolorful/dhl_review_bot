@@ -4,6 +4,7 @@ old_swaggers/
 az_blob_test.py
 backups/
 .vscode/
+creds.json
 
 *.exe
 *.txt
