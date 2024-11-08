@@ -30,7 +30,7 @@ try:
     # NOTE: Init 
     print("start")
     # NOTE: use either "local" or "remote"
-    engine = database.make_engine("remote") # Remote connection
+    engine = database.make_engine("remote") 
     print("connecting to db...")
     con = engine.connect()
     if not con:
@@ -39,57 +39,57 @@ try:
     print("done")
     
     # NOTE: Scraping reviews
-    print("extracting new indeed reviews...")
-    new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(3))
-    new_reviews_indeed.drop_duplicates(subset=['ID'])
-    print("done")
-    print("putting indeed reviews into database...")
-    database.put_df_in_sql(new_reviews_indeed, con)
-    print("done")
-    print("extracting new glassdoor reviews...")
-    new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
-    new_reviews_glassdoor.drop_duplicates(subset=['ID'])
-    print("done")
-    print("putting glassdoor reviews into database...")
-    database.put_df_in_sql(new_reviews_glassdoor, con)
-    print("done")
-    print("extracting new kununu reviews...")
-    new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
-    new_reviews_kununu.drop_duplicates(subset=['ID'])
-    print("done")
-    print("putting kununu reviews into database...")
-    database.put_df_in_sql(new_reviews_kununu, con)
-    print("done")
+    # print("extracting new indeed reviews...")
+    # new_reviews_indeed = scraping.extract_new_reviews("Indeed", datetime.datetime.now() - datetime.timedelta(3))
+    # new_reviews_indeed.drop_duplicates(subset=['ID'])
+    # print("done")
+    # print("putting indeed reviews into database...")
+    # database.put_df_in_sql(new_reviews_indeed, con)
+    # print("done")
+    # print("extracting new glassdoor reviews...")
+    # new_reviews_glassdoor = scraping.extract_new_reviews("Glassdoor", datetime.datetime.now() - datetime.timedelta(5))
+    # new_reviews_glassdoor.drop_duplicates(subset=['ID'])
+    # print("done")
+    # print("putting glassdoor reviews into database...")
+    # database.put_df_in_sql(new_reviews_glassdoor, con)
+    # print("done")
+    # print("extracting new kununu reviews...")
+    # new_reviews_kununu = scraping.extract_new_reviews("kununu", datetime.datetime.now() - datetime.timedelta(3))
+    # new_reviews_kununu.drop_duplicates(subset=['ID'])
+    # print("done")
+    # print("putting kununu reviews into database...")
+    # database.put_df_in_sql(new_reviews_kununu, con)
+    # print("done")
 
-    # NOTE: Refreshing reviews
-    # print("checking if older reviews have been removed from platforms or otherwise updated...")
-    # refresh = database.fetch_refresh_reviews(con)
-    # scraping.refresh_reviews(refresh, con)
-    # print("done")
-    # print("updating database")
-    # try:
-    #     database.put_df_in_sql(refresh, con, False, True)
-    # except Exception as ex:
-    #     log(ex, header="(Refreshing)")
-    # print("done")
+    # # NOTE: Refreshing reviews
+    # # print("checking if older reviews have been removed from platforms or otherwise updated...")
+    # # refresh = database.fetch_refresh_reviews(con)
+    # # scraping.refresh_reviews(refresh, con)
+    # # print("done")
+    # # print("updating database")
+    # # try:
+    # #     database.put_df_in_sql(refresh, con, False, True)
+    # # except Exception as ex:
+    # #     log(ex, header="(Refreshing)")
+    # # print("done")
         
-    # NOTE: Completing kununu reviews
-    print("pulling reviews with incomplete information from database...")
-    incomplete_rows = database.fetch_incomplete_rows(con, count=20)
-    print("done")
-    print("generating missing data with gaia...")
-    gaia.complete_rows(incomplete_rows)
-    print("done")
-    print("updating reviews...")
-    try:
-        database.put_df_in_sql(incomplete_rows, con, False, True)
-    except Exception as ex:
-        log(ex, header="(Completing)")
-    print("done")
+    # # NOTE: Completing kununu reviews
+    # print("pulling reviews with incomplete information from database...")
+    # incomplete_rows = database.fetch_incomplete_rows(con, count=20)
+    # print("done")
+    # print("generating missing data with gaia...")
+    # gaia.complete_rows(incomplete_rows)
+    # print("done")
+    # print("updating reviews...")
+    # try:
+    #     database.put_df_in_sql(incomplete_rows, con, False, True)
+    # except Exception as ex:
+    #     log(ex, header="(Completing)")
+    # print("done")
 
     # NOTE: Generating responses
     print("pulling unanswered reviews from the past few days from database...")
-    unanswered_reviews = database.fetch_unanswered_reviews(con, datetime.datetime.now() - datetime.timedelta(days=10))
+    unanswered_reviews = database.fetch_unanswered_reviews(con, datetime.datetime.now() - datetime.timedelta(days=100))
     print("done")
     f = open("df.txt", "w") # Overwrite
     f.write(unanswered_reviews.to_string())
@@ -135,8 +135,8 @@ try:
         log(ex, header="(Translations)")
     print("done")
 
-    # NOTE: Backup
-    print("generating backup csv")
+    # NOTE: CSV backup and Blob upload
+    print("generating backup csv and uploading to blob")
     backup(con, database.SQL_TABLE_NAME)
     print("done")
     
